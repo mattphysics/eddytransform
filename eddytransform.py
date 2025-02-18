@@ -10,6 +10,132 @@ import scipy
 import pandas as pd
 import os
 
+def identify_lontype(ds,lon='lon',lat='lat'):
+    '''
+    Identify if a Dataset is of type [0 - 360] degree longitude ('360'), or of type [-180 - 180] degree longitude ('180')
+    '''
+    if (ds[lon].max() > 180 and ds[lon].min() >= 0):
+        lontype = '360'
+    elif (ds[lon].max() <= 180 and ds[lon].min() <  0):
+        lontype = '180'
+    else:
+        raise ValueError('cannot reliably identify lontype')
+    if (ds[lon].max() > 180 and ds[lon].min() < 0):
+        raise ValueError('inconsistent')
+    elif (ds[lon].max() > 180 and ds[lon].min() < 0):
+        raise ValueError('inconsistent')
+    return lontype
+
+def sel_region(ds,LON_CENTER,LAT_CENTER,DOMAIN_HALF_WIDTH_IN_DEGREES,lontype=None,lon='lon',lat='lat'):
+    '''
+    Select a latitude-longitude box from a regular grid Dataset
+    '''
+    # identify type
+    lontype0 = lontype
+    if lontype is None:
+        lontype = identify_lontype(ds=ds,lon=lon,lat=lat)
+    else:
+        print('lontype = %s is enforced' % lontype)
+        
+    if lontype == '180':
+        ds_region = sel_region_180(ds,LON_CENTER,LAT_CENTER,DOMAIN_HALF_WIDTH_IN_DEGREES)
+    elif lontype == '360':
+        ds_region = sel_region_360(ds,LON_CENTER,LAT_CENTER,DOMAIN_HALF_WIDTH_IN_DEGREES)
+    else:
+        raise ValueError('lontype = %s is not defined' % lontype)
+
+    if not (lontype0 is None):
+        assert identify_lontype(ds_region) == lontype
+    return ds_region
+
+def sel_region_180(ds,LON_CENTER,LAT_CENTER,DOMAIN_HALF_WIDTH_IN_DEGREES):
+    '''
+    select region centered on a coordinate if longitude is [-180, 180]
+    '''
+
+    ds_region = ds.sel(
+        lon=slice(LON_CENTER-DOMAIN_HALF_WIDTH_IN_DEGREES, LON_CENTER+DOMAIN_HALF_WIDTH_IN_DEGREES),
+        lat=slice(LAT_CENTER-DOMAIN_HALF_WIDTH_IN_DEGREES, LAT_CENTER+DOMAIN_HALF_WIDTH_IN_DEGREES),
+    )
+
+    if (LON_CENTER-DOMAIN_HALF_WIDTH_IN_DEGREES)<-180:
+        print('concat left')
+        ds_left = ds.sel(
+                lon=slice(180+(LON_CENTER-DOMAIN_HALF_WIDTH_IN_DEGREES), 180),
+                lat=slice(LAT_CENTER-DOMAIN_HALF_WIDTH_IN_DEGREES, LAT_CENTER+DOMAIN_HALF_WIDTH_IN_DEGREES),
+        )
+        ds_left = ds_left.assign_coords(lon=ds_left['lon']-360)
+    
+        ds_region = xr.concat(
+            [
+                ds_left,
+                ds_region
+            ],
+            dim='lon'
+        )
+    elif (LON_CENTER+DOMAIN_HALF_WIDTH_IN_DEGREES)>180:
+        print('concat right')
+        ds_right = ds.sel(
+                lon=slice(-180,(LON_CENTER+DOMAIN_HALF_WIDTH_IN_DEGREES)-360),
+                lat=slice(LAT_CENTER-DOMAIN_HALF_WIDTH_IN_DEGREES, LAT_CENTER+DOMAIN_HALF_WIDTH_IN_DEGREES),
+        )
+        ds_right = ds_right.assign_coords(lon=ds_right['lon']+360)
+    
+        
+        ds_region = xr.concat(
+            [
+                ds_region,
+                ds_right
+            ],
+            dim='lon'
+        )
+
+    return ds_region
+
+def sel_region_360(ds,LON_CENTER,LAT_CENTER,DOMAIN_HALF_WIDTH_IN_DEGREES):
+    '''
+    select region centered on a coordinate if longitude is [0, 360]
+    '''
+
+    ds_region = ds.sel(
+        lon=slice(LON_CENTER-DOMAIN_HALF_WIDTH_IN_DEGREES, LON_CENTER+DOMAIN_HALF_WIDTH_IN_DEGREES),
+        lat=slice(LAT_CENTER-DOMAIN_HALF_WIDTH_IN_DEGREES, LAT_CENTER+DOMAIN_HALF_WIDTH_IN_DEGREES),
+    )
+    
+    if (LON_CENTER-DOMAIN_HALF_WIDTH_IN_DEGREES)<0:
+        print('concat left')
+        ds_left = ds.sel(
+                lon=slice(360+(LON_CENTER-DOMAIN_HALF_WIDTH_IN_DEGREES), 360),
+                lat=slice(LAT_CENTER-DOMAIN_HALF_WIDTH_IN_DEGREES, LAT_CENTER+DOMAIN_HALF_WIDTH_IN_DEGREES),
+        )
+        ds_left = ds_left.assign_coords(lon=ds_left['lon']-360)
+    
+        ds_region = xr.concat(
+            [
+                ds_left,
+                ds_region
+            ],
+            dim='lon'
+        )
+    elif (LON_CENTER+DOMAIN_HALF_WIDTH_IN_DEGREES)>360:
+        print('concat right')
+        ds_right = ds.sel(
+                lon=slice(0,(LON_CENTER+DOMAIN_HALF_WIDTH_IN_DEGREES)-360),
+                lat=slice(LAT_CENTER-DOMAIN_HALF_WIDTH_IN_DEGREES, LAT_CENTER+DOMAIN_HALF_WIDTH_IN_DEGREES),
+        )
+        ds_right = ds_right.assign_coords(lon=ds_right['lon']+360)
+    
+        
+        ds_region = xr.concat(
+            [
+                ds_region,
+                ds_right
+            ],
+            dim='lon'
+        )
+
+    return ds_region
+
 def all_equal(arr, tolerance=1e-6):
     """ Return True if all values are equal within the specified tolerance.
 
@@ -249,9 +375,16 @@ def transform_sample_point(
     VPARAM = "avg_10v",
     ds_wind=None
 ):
-    ds_region = ds.sel(time=TIME_DX).sel(
-        lon=slice(EDDY_LON-DOMAIN_HALF_WIDTH_IN_DEGREES, EDDY_LON+DOMAIN_HALF_WIDTH_IN_DEGREES),
-        lat=slice(EDDY_LAT-DOMAIN_HALF_WIDTH_IN_DEGREES, EDDY_LAT+DOMAIN_HALF_WIDTH_IN_DEGREES),
+    # ds_region = ds.sel(time=TIME_DX).sel(
+    #     lon=slice(EDDY_LON-DOMAIN_HALF_WIDTH_IN_DEGREES, EDDY_LON+DOMAIN_HALF_WIDTH_IN_DEGREES),
+    #     lat=slice(EDDY_LAT-DOMAIN_HALF_WIDTH_IN_DEGREES, EDDY_LAT+DOMAIN_HALF_WIDTH_IN_DEGREES),
+    # )
+    ds_region = sel_region(
+        ds.sel(time=TIME_DX),
+        LON_CENTER=EDDY_LON,
+        LAT_CENTER=EDDY_LAT,
+        DOMAIN_HALF_WIDTH_IN_DEGREES=DOMAIN_HALF_WIDTH_IN_DEGREES,
+        lontype=None,lon='lon',lat='lat'
     )
 
     # Create a local cartesian coordinate system with (x,y) specifing distance from eddy in km.
@@ -333,9 +466,16 @@ def eddy_calc_wind_direction(
     VPARAM = "avg_10v"
 ):
 
-    ds_region = ds.sel(time=TIME_DX).sel(
-        lon=slice(EDDY_LON-DOMAIN_HALF_WIDTH_IN_DEGREES, EDDY_LON+DOMAIN_HALF_WIDTH_IN_DEGREES),
-        lat=slice(EDDY_LAT-DOMAIN_HALF_WIDTH_IN_DEGREES, EDDY_LAT+DOMAIN_HALF_WIDTH_IN_DEGREES),
+    # ds_region = ds.sel(time=TIME_DX).sel(
+    #     lon=slice(EDDY_LON-DOMAIN_HALF_WIDTH_IN_DEGREES, EDDY_LON+DOMAIN_HALF_WIDTH_IN_DEGREES),
+    #     lat=slice(EDDY_LAT-DOMAIN_HALF_WIDTH_IN_DEGREES, EDDY_LAT+DOMAIN_HALF_WIDTH_IN_DEGREES),
+    # )
+    ds_region = sel_region(
+        ds.sel(time=TIME_DX),
+        LON_CENTER=EDDY_LON,
+        LAT_CENTER=EDDY_LAT,
+        DOMAIN_HALF_WIDTH_IN_DEGREES=DOMAIN_HALF_WIDTH_IN_DEGREES,
+        lontype=None,lon='lon',lat='lat'
     )
 
     x, y = get_local_cartesian_coords(
@@ -374,9 +514,16 @@ def rotate_winds_point(
     VPARAM = "avg_10v"
 ):
 
-    ds_region = ds.sel(time=TIME_DX).sel(
-        lon=slice(EDDY_LON-DOMAIN_HALF_WIDTH_IN_DEGREES, EDDY_LON+DOMAIN_HALF_WIDTH_IN_DEGREES),
-        lat=slice(EDDY_LAT-DOMAIN_HALF_WIDTH_IN_DEGREES, EDDY_LAT+DOMAIN_HALF_WIDTH_IN_DEGREES),
+    # ds_region = ds.sel(time=TIME_DX).sel(
+    #     lon=slice(EDDY_LON-DOMAIN_HALF_WIDTH_IN_DEGREES, EDDY_LON+DOMAIN_HALF_WIDTH_IN_DEGREES),
+    #     lat=slice(EDDY_LAT-DOMAIN_HALF_WIDTH_IN_DEGREES, EDDY_LAT+DOMAIN_HALF_WIDTH_IN_DEGREES),
+    # )
+    ds_region = sel_region(
+        ds.sel(time=TIME_DX),
+        LON_CENTER=EDDY_LON,
+        LAT_CENTER=EDDY_LAT,
+        DOMAIN_HALF_WIDTH_IN_DEGREES=DOMAIN_HALF_WIDTH_IN_DEGREES,
+        lontype=None,lon='lon',lat='lat'
     )
 
     x, y = get_local_cartesian_coords(
