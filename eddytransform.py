@@ -4,10 +4,11 @@ rotated/rescaled transformed coordinate system.
 
 """
 
-
+import xarray as xr
 import numpy as np
 import scipy
-
+import pandas as pd
+import os
 
 def all_equal(arr, tolerance=1e-6):
     """ Return True if all values are equal within the specified tolerance.
@@ -20,17 +21,17 @@ def all_equal(arr, tolerance=1e-6):
         raise ValueError("Cannot test equality on empty array/list.")
 
 
-def check_lat_lon_coords(lats, lons, tolerance=1e-6):
+def check_lat_lon_coords(lats, lons, tolerance=1e-4):
     """ Raises error if latitude/longitude coordinates do not have the assumed properties.
     
     :param np.array lats: One-dimensional array containing latitude values.
     :param np.array lons: One-dimensional array containing longitude values.
     """
     # Checks that lat/lon coordinates are regularly spaced
-    if not all_equal(np.diff(lats)):
+    if not all_equal(np.diff(lats),tolerance=tolerance):
         raise ValueError(f"Latitude values are not regularly spaced.")
         
-    if not all_equal(np.diff(lons)):
+    if not all_equal(np.diff(lons),tolerance=tolerance):
         raise ValueError(f"Longitude values are not regularly spaced.")
 
 
@@ -221,13 +222,513 @@ def interpolate_data_to_sample_locations(
 
     xsample_1d = np.array(sample_position_vectors_in_original_coords[0,:]).squeeze()
     ysample_1d = np.array(sample_position_vectors_in_original_coords[1,:]).squeeze()
+    #print('cubic')
     resampled_data_in_transformed_coords_1d = scipy.interpolate.griddata(
         (x_1d, y_1d),
         data_1d,
         (xsample_1d, ysample_1d),
+        #method="cubic",
         method="linear",
     )
     # Return reshaped transformed data to 2D 
     transformed_x_2d, _ = np.meshgrid(transformed_x, transformed_y) 
     return resampled_data_in_transformed_coords_1d.reshape(transformed_x_2d.shape)
 
+def transform_sample_point(
+    ds,
+    COMPOSITE_PARAM, # = "avg_sst"
+    TIME_DX, # time-index
+    EDDY_LON, # eddy center longitude
+    EDDY_LAT, # eddy center latitude
+    DOMAIN_HALF_WIDTH_IN_DEGREES = 10, # domain half width
+    EDDY_RADIUS = 100, # User-specified eddy radius in km.
+    AVG_WIND_EDDY_RADIUSES = 2, # Number of eddy radiuses used for calculating direction of large-scale winds. 
+    RESAMPLE_EDDY_RADIUSES = 3, # Number of eddy radiuses to sample in transformed composite coordinates.
+    RESAMPLE_DENSITY = 30, # Number of data points per eddy radius in transformed composite coordinates.
+    UPARAM = "avg_10u", 
+    VPARAM = "avg_10v",
+    ds_wind=None
+):
+    ds_region = ds.sel(time=TIME_DX).sel(
+        lon=slice(EDDY_LON-DOMAIN_HALF_WIDTH_IN_DEGREES, EDDY_LON+DOMAIN_HALF_WIDTH_IN_DEGREES),
+        lat=slice(EDDY_LAT-DOMAIN_HALF_WIDTH_IN_DEGREES, EDDY_LAT+DOMAIN_HALF_WIDTH_IN_DEGREES),
+    )
+
+    # Create a local cartesian coordinate system with (x,y) specifing distance from eddy in km.
+    x, y = get_local_cartesian_coords(
+        ds_region["lat"].data,
+        ds_region["lon"].data,
+    )
+
+    # Create the grid for transformed coordinate system
+    transformed_x, transformed_y = create_transformed_coordinates(
+        RESAMPLE_EDDY_RADIUSES,
+        RESAMPLE_DENSITY,
+    )
+
+    if ds_wind is None:
+        ds_region_wind = ds_region
+        x_wind, y_wind = x, y
+    else:
+        ds_region_wind = ds_wind.sel(time=TIME_DX).sel(
+            lon=slice(EDDY_LON-DOMAIN_HALF_WIDTH_IN_DEGREES, EDDY_LON+DOMAIN_HALF_WIDTH_IN_DEGREES),
+            lat=slice(EDDY_LAT-DOMAIN_HALF_WIDTH_IN_DEGREES, EDDY_LAT+DOMAIN_HALF_WIDTH_IN_DEGREES),
+        )
+        # Create a local cartesian coordinate system with (x,y) specifing distance from eddy in km.
+        x_wind, y_wind = get_local_cartesian_coords(
+            ds_region_wind["lat"].data,
+            ds_region_wind["lon"].data,
+        )
+
+    # Find direction of large-scale wind (averaged over within specified number of km from eddy centre)
+    if UPARAM is None or VPARAM is None:
+        print('u and/or v are not provided. DO NOT rotate eddies')
+        wind_direction_in_radians_from_x = 0.
+    else:
+        wind_direction_in_radians_from_x = calc_direction_of_average_winds(
+            # x,
+            # y,
+            x_wind,
+            y_wind,
+            # ds_region[UPARAM].values,
+            # ds_region[VPARAM].values,
+            ds_region_wind[UPARAM].values,
+            ds_region_wind[VPARAM].values,
+            distance_from_eddy_threshold=AVG_WIND_EDDY_RADIUSES*EDDY_RADIUS,
+            # lats = ds_region.lat.values,
+            lats = ds_region_wind.lat.values,
+        )
+
+    # Find coordinates of requested locations in local cartesian coordinate system
+    sample_position_vectors_in_original_coords = create_position_vectors_in_original_coords(
+        transformed_x,
+        transformed_y,
+        wind_direction_in_radians_from_x,
+        EDDY_RADIUS,
+    )
+
+    # Resample data into the transformed coordinate system
+    resampled_data_in_transformed_coords = interpolate_data_to_sample_locations(
+        ds_region[COMPOSITE_PARAM].values,
+        x,
+        y,
+        transformed_x,
+        transformed_y,
+        sample_position_vectors_in_original_coords,
+    )
+
+    return transformed_x, transformed_y, resampled_data_in_transformed_coords
+
+def eddy_calc_wind_direction(
+    ds,
+    TIME_DX, # time-index
+    EDDY_LON, # eddy center longitude
+    EDDY_LAT, # eddy center latitude
+    DOMAIN_HALF_WIDTH_IN_DEGREES = 10, # domain half width
+    EDDY_RADIUS = 100, # User-specified eddy radius in km.
+    AVG_WIND_EDDY_RADIUSES = 2, # Number of eddy radiuses used for calculating direction of large-scale winds.
+    RESAMPLE_EDDY_RADIUSES = 3, # Number of eddy radiuses to sample in transformed composite coordinates.
+    RESAMPLE_DENSITY = 30, # Number of data points per eddy radius in transformed composite coordinates.
+    UPARAM = "avg_10u",
+    VPARAM = "avg_10v"
+):
+
+    ds_region = ds.sel(time=TIME_DX).sel(
+        lon=slice(EDDY_LON-DOMAIN_HALF_WIDTH_IN_DEGREES, EDDY_LON+DOMAIN_HALF_WIDTH_IN_DEGREES),
+        lat=slice(EDDY_LAT-DOMAIN_HALF_WIDTH_IN_DEGREES, EDDY_LAT+DOMAIN_HALF_WIDTH_IN_DEGREES),
+    )
+
+    x, y = get_local_cartesian_coords(
+        ds_region["lat"].data,
+        ds_region["lon"].data,
+    )
+
+    # Create the grid for transformed coordinate system
+    transformed_x, transformed_y = create_transformed_coordinates(
+        RESAMPLE_EDDY_RADIUSES,
+        RESAMPLE_DENSITY,
+    )
+
+    wind_direction_in_radians_from_x = calc_direction_of_average_winds(
+        x,
+        y,
+        ds_region[UPARAM].values,
+        ds_region[VPARAM].values,
+        distance_from_eddy_threshold=AVG_WIND_EDDY_RADIUSES*EDDY_RADIUS,
+        lats = ds_region.lat.values,
+    )
+    print('Wind angle: %.2f rad, %.2f deg' % (wind_direction_in_radians_from_x,np.rad2deg(wind_direction_in_radians_from_x)))
+    return wind_direction_in_radians_from_x
+
+def rotate_winds_point(
+    ds,
+    TIME_DX, # time-index
+    EDDY_LON, # eddy center longitude
+    EDDY_LAT, # eddy center latitude
+    DOMAIN_HALF_WIDTH_IN_DEGREES = 10, # domain half width
+    EDDY_RADIUS = 100, # User-specified eddy radius in km.
+    AVG_WIND_EDDY_RADIUSES = 2, # Number of eddy radiuses used for calculating direction of large-scale winds.
+    RESAMPLE_EDDY_RADIUSES = 3, # Number of eddy radiuses to sample in transformed composite coordinates.
+    RESAMPLE_DENSITY = 30, # Number of data points per eddy radius in transformed composite coordinates.
+    UPARAM = "avg_10u",
+    VPARAM = "avg_10v"
+):
+
+    ds_region = ds.sel(time=TIME_DX).sel(
+        lon=slice(EDDY_LON-DOMAIN_HALF_WIDTH_IN_DEGREES, EDDY_LON+DOMAIN_HALF_WIDTH_IN_DEGREES),
+        lat=slice(EDDY_LAT-DOMAIN_HALF_WIDTH_IN_DEGREES, EDDY_LAT+DOMAIN_HALF_WIDTH_IN_DEGREES),
+    )
+
+    x, y = get_local_cartesian_coords(
+        ds_region["lat"].data,
+        ds_region["lon"].data,
+    )
+
+    # Create the grid for transformed coordinate system
+    transformed_x, transformed_y = create_transformed_coordinates(
+        RESAMPLE_EDDY_RADIUSES,
+        RESAMPLE_DENSITY,
+    )
+
+    wind_direction_in_radians_from_x = calc_direction_of_average_winds(
+        x,
+        y,
+        ds_region[UPARAM].values,
+        ds_region[VPARAM].values,
+        distance_from_eddy_threshold=AVG_WIND_EDDY_RADIUSES*EDDY_RADIUS,
+        lats = ds_region.lat.values,
+    )
+    print('Wind angle: %.2f rad, %.2f deg' % (wind_direction_in_radians_from_x,np.rad2deg(wind_direction_in_radians_from_x)))
+
+    sample_position_vectors_in_original_coords = create_position_vectors_in_original_coords(
+        transformed_x,
+        transformed_y,
+        wind_direction_in_radians_from_x,
+        EDDY_RADIUS,
+    )
+
+    # rotate wind vectors
+    wind_vector_components_transformed_coords = rotate_vectors(
+            np.matrix([
+                ds_region[UPARAM].values.reshape(ds_region[UPARAM].values.size),
+                ds_region[VPARAM].values.reshape(ds_region[VPARAM].values.size)
+            ]),
+            wind_direction_in_radians_from_x,
+            transpose=True,
+        )
+
+    # Resample data into the transformed coordinate system - u-wind
+    resampled_data_in_transformed_coords_u = interpolate_data_to_sample_locations(
+        np.squeeze(np.array(wind_vector_components_transformed_coords[0])),#.reshape(80,80),
+        x,
+        y,
+        transformed_x,
+        transformed_y,
+        sample_position_vectors_in_original_coords,
+    )
+    # Resample data into the transformed coordinate system - v-wind
+    resampled_data_in_transformed_coords_v = interpolate_data_to_sample_locations(
+        np.squeeze(np.array(wind_vector_components_transformed_coords[1])),#.reshape(80,80),
+        x,
+        y,
+        transformed_x,
+        transformed_y,
+        sample_position_vectors_in_original_coords,
+    )
+
+    return transformed_x, transformed_y, resampled_data_in_transformed_coords_u, resampled_data_in_transformed_coords_v
+
+
+def transform_winds(
+    ds,
+    TIME_DX, # time-index
+    EDDY_LON, # eddy center longitude
+    EDDY_LAT, # eddy center latitude
+    DOMAIN_HALF_WIDTH_IN_DEGREES = 10, # domain half width
+    EDDY_RADIUS = 100, # User-specified eddy radius in km.
+    AVG_WIND_EDDY_RADIUSES = 2, # Number of eddy radiuses used for calculating direction of large-scale winds.
+    RESAMPLE_EDDY_RADIUSES = 3, # Number of eddy radiuses to sample in transformed composite coordinates.
+    RESAMPLE_DENSITY = 30, # Number of data points per eddy radius in transformed composite coordinates.
+    UPARAM = "avg_10u",
+    VPARAM = "avg_10v"
+):
+    print([
+        'rotate u/v',
+        TIME_DX,
+        EDDY_LON,
+        EDDY_LAT,
+        DOMAIN_HALF_WIDTH_IN_DEGREES,
+        EDDY_RADIUS,
+        AVG_WIND_EDDY_RADIUSES,
+        RESAMPLE_EDDY_RADIUSES,
+        RESAMPLE_DENSITY,
+        UPARAM,
+        VPARAM
+    ])
+
+    transformed_x, transformed_y, resampled_data_in_transformed_coords_u, resampled_data_in_transformed_coords_v = rotate_winds_point(
+        ds = ds,
+        TIME_DX = TIME_DX,
+        EDDY_LON = EDDY_LON,
+        EDDY_LAT = EDDY_LAT,
+        DOMAIN_HALF_WIDTH_IN_DEGREES = DOMAIN_HALF_WIDTH_IN_DEGREES,
+        EDDY_RADIUS = EDDY_RADIUS,
+        AVG_WIND_EDDY_RADIUSES = AVG_WIND_EDDY_RADIUSES,
+        RESAMPLE_EDDY_RADIUSES = RESAMPLE_EDDY_RADIUSES,
+        RESAMPLE_DENSITY = RESAMPLE_DENSITY,
+        UPARAM = UPARAM,
+        VPARAM = VPARAM
+    )
+
+    out = xr.Dataset(coords={'x': transformed_x, 'y': transformed_y})
+    out[UPARAM] = xr.DataArray(dims=['x','y'],coords={'x':transformed_x,'y':transformed_y},data=resampled_data_in_transformed_coords_u)
+    out[VPARAM] = xr.DataArray(dims=['x','y'],coords={'x':transformed_x,'y':transformed_y},data=resampled_data_in_transformed_coords_v)
+
+    out[UPARAM].attrs = ds[UPARAM].attrs
+    out[VPARAM].attrs = ds[VPARAM].attrs
+
+    out['x'].attrs['long_name'] = 'x_coordinate'
+    out['x'].attrs['units'] = 'Eddy radii'
+    out['y'].attrs['long_name'] = 'y_coordinate'
+    out['y'].attrs['units'] = 'Eddy radii'
+
+    out = out.transpose()
+
+    out['time'] = TIME_DX
+    out['lon'] = EDDY_LON
+    out['lat'] = EDDY_LAT
+
+    out.attrs['DOMAIN_HALF_WIDTH_IN_DEGREES'] = DOMAIN_HALF_WIDTH_IN_DEGREES
+    out.attrs['EDDY_RADIUS'] = EDDY_RADIUS
+    out.attrs['AVG_WIND_EDDY_RADIUSES'] = AVG_WIND_EDDY_RADIUSES
+    out.attrs['RESAMPLE_EDDY_RADIUSES'] = RESAMPLE_EDDY_RADIUSES
+    out.attrs['RESAMPLE_DENSITY'] = RESAMPLE_DENSITY
+    out.attrs['UPARAM'] = UPARAM
+    out.attrs['VPARAM'] = VPARAM
+
+    return out
+
+def transform_eddy(
+    ds,
+    COMPOSITE_PARAM, # = "avg_sst"
+    TIME_DX, # time-index
+    EDDY_LON, # eddy center longitude
+    EDDY_LAT, # eddy center latitude
+    DOMAIN_HALF_WIDTH_IN_DEGREES = 10, # domain half width
+    EDDY_RADIUS = 100, # User-specified eddy radius in km.
+    AVG_WIND_EDDY_RADIUSES = 2, # Number of eddy radiuses used for calculating direction of large-scale winds. 
+    RESAMPLE_EDDY_RADIUSES = 3, # Number of eddy radiuses to sample in transformed composite coordinates.
+    RESAMPLE_DENSITY = 30, # Number of data points per eddy radius in transformed composite coordinates.
+    UPARAM = "avg_10u", 
+    VPARAM = "avg_10v",
+    ds_wind = None
+):
+    print([
+        COMPOSITE_PARAM,
+        TIME_DX,
+        EDDY_LON,
+        EDDY_LAT,
+        DOMAIN_HALF_WIDTH_IN_DEGREES,
+        EDDY_RADIUS,
+        AVG_WIND_EDDY_RADIUSES,
+        RESAMPLE_EDDY_RADIUSES,
+        RESAMPLE_DENSITY,
+        UPARAM,
+        VPARAM
+    ])
+
+
+    transformed_x, transformed_y, resampled_data_in_transformed_coords = transform_sample_point(
+    ds = ds,
+    COMPOSITE_PARAM = COMPOSITE_PARAM,
+    TIME_DX = TIME_DX,
+    EDDY_LON = EDDY_LON,
+    EDDY_LAT = EDDY_LAT,
+    DOMAIN_HALF_WIDTH_IN_DEGREES = DOMAIN_HALF_WIDTH_IN_DEGREES,
+    EDDY_RADIUS = EDDY_RADIUS,
+    AVG_WIND_EDDY_RADIUSES = AVG_WIND_EDDY_RADIUSES,
+    RESAMPLE_EDDY_RADIUSES = RESAMPLE_EDDY_RADIUSES,
+    RESAMPLE_DENSITY = RESAMPLE_DENSITY,
+    UPARAM = UPARAM,
+    VPARAM = VPARAM,
+    ds_wind = ds_wind
+)
+
+    #out = xr.Dataset(coords={'x': transformed_x, 'y': transformed_y})
+    out = xr.Dataset()#coords={'x': transformed_x, 'y': transformed_y})
+    #out[COMPOSITE_PARAM] = xr.DataArray(dims=['x','y'],coords={'x':transformed_x,'y':transformed_y},data=resampled_data_in_transformed_coords)
+    out[COMPOSITE_PARAM] = xr.DataArray(dims=['x','y'],coords={'x':transformed_x,'y':transformed_y},data=resampled_data_in_transformed_coords.T)
+
+    out[COMPOSITE_PARAM].attrs = ds[COMPOSITE_PARAM].attrs
+
+    out['x'].attrs['long_name'] = 'x_coordinate'
+    out['x'].attrs['units'] = 'Eddy radii'
+    out['y'].attrs['long_name'] = 'y_coordinate'
+    out['y'].attrs['units'] = 'Eddy radii'
+
+    # out = out.transpose()
+    out = out.transpose()
+
+    out['time'] = TIME_DX
+    out['lon'] = EDDY_LON
+    out['lat'] = EDDY_LAT
+
+    out.attrs['DOMAIN_HALF_WIDTH_IN_DEGREES'] = DOMAIN_HALF_WIDTH_IN_DEGREES
+    out.attrs['EDDY_RADIUS'] = EDDY_RADIUS
+    out.attrs['AVG_WIND_EDDY_RADIUSES'] = AVG_WIND_EDDY_RADIUSES
+    out.attrs['RESAMPLE_EDDY_RADIUSES'] = RESAMPLE_EDDY_RADIUSES
+    out.attrs['RESAMPLE_DENSITY'] = RESAMPLE_DENSITY
+    out.attrs['UPARAM'] = UPARAM
+    out.attrs['VPARAM'] = VPARAM
+
+    return out
+
+
+
+def get_tracks(kind,source='AVISO'):
+    if source=='AVISO':
+        # catobs = intake.open_catalog('https://raw.githubusercontent.com/eerie-project/intake_catalogues/main/eerie.yaml')\
+                                #   ['dkrz']['disk']['observations']
+        if kind == 'anticyclonic':
+            tracks = xr.open_dataset('/ec/fws5/lb/project/eerie/data/AVISO/META3.2_DT_allsat_Anticyclonic_long_19930101_20220209.nc')
+        elif kind == 'cyclonic':
+            tracks = xr.open_dataset('/ec/fws5/lb/project/eerie/data/AVISO/META3.2_DT_allsat_Cyclonic_long_19930101_20220209.nc')
+        # tracks = catobs['AVISO']['eddy-tracks'][kind].to_dask()
+        tracks['time'].values = pd.to_datetime(tracks.time)
+
+        tracks['obs'] = np.arange(tracks['obs'].size)
+
+        tracks['year'] = tracks['time.year']
+        return tracks
+
+def load_eddy_tracks(
+    kind,
+    source='AVISO',
+    thin_by_obs=1,  # keep every nth observation
+    thin_by_date=1, # keep every nth date (in the tracks) to better sample variability
+    thin_by_eddy=1  # for each eddy, keep only every nth date
+):
+    tracks0 = get_tracks(kind,source=source)
+    tracks0['time'] = tracks0['time'] + pd.Timedelta('12h')
+
+    if thin_by_obs > 1:
+        tracks0 = tracks0.sel(obs=slice(0,None,thin_by_obs))
+
+    if thin_by_date > 1:
+        raise ValueError('not defined')
+
+    if thin_by_eddy > 1:
+        raise ValueError('not defined')
+
+    return tracks0
+
+
+
+def compute_eddy_tracks():
+    print('TBD')
+
+
+def hpfilter(
+    ds,
+    filterparams
+):
+    # TODO: question: filtering 
+    #   - globally before selecting?
+    #   - on the regional selection before rotation / scaling?
+    #   - on the resampled data in eddy-space?
+    print('TBD')
+
+
+def loop_over_eddies(
+    ds,
+    tracks,
+    params,
+    # COMPOSITE_PARAM,
+    DOMAIN_HALF_WIDTH_IN_DEGREES = 10, # domain half width
+    AVG_WIND_EDDY_RADIUSES = 2, # Number of eddy radiuses used for calculating direction of large-scale winds. 
+    RESAMPLE_EDDY_RADIUSES = 3, # Number of eddy radiuses to sample in transformed composite coordinates.
+    RESAMPLE_DENSITY = 30, # Number of data points per eddy radius in transformed composite coordinates.
+    UPARAM = "avg_10u", 
+    VPARAM = "avg_10v",
+    rotate_winds = True,
+    ds_wind = None,
+    fname_root = None,
+    **kwargs
+):
+
+    if not isinstance(params,list):
+        params = [params]
+    if UPARAM is None or VPARAM is None:
+        rotate_winds = False
+    if rotate_winds is True and ds_wind is None:
+        ds_wind = ds
+    print('Composite parameters: ', params)
+    N = tracks['obs'].size
+    N_saved = 0
+    print('Loop over %i eddies' % N)
+
+    eddies = []
+    for i in range(N):
+        #print(i)
+        tracki = tracks.isel(obs=i)
+        print('\n%i , obs = %i' % (i, tracki['obs']))
+        # print(tracki)
+        eddy = []
+        if fname_root is not None:
+            assert isinstance(fname_root,str)
+            fname = fname_root + '%i.nc' % tracki['obs']
+            if os.path.exists(fname):
+                print('File exists for obs=%i, continue...' % tracki['obs'])
+                continue
+
+        for param in params:
+            eddyi = transform_eddy(
+                ds,
+                COMPOSITE_PARAM = param,
+                TIME_DX = tracki['time'].values,
+                EDDY_LON = tracki['longitude'].values,
+                EDDY_LAT = tracki['latitude'].values,
+                DOMAIN_HALF_WIDTH_IN_DEGREES = DOMAIN_HALF_WIDTH_IN_DEGREES,
+                EDDY_RADIUS = np.round(tracki['effective_radius'].values / 1000),
+                AVG_WIND_EDDY_RADIUSES = AVG_WIND_EDDY_RADIUSES,
+                RESAMPLE_EDDY_RADIUSES = RESAMPLE_EDDY_RADIUSES,
+                RESAMPLE_DENSITY = RESAMPLE_DENSITY,
+                UPARAM = UPARAM,
+                VPARAM = VPARAM,
+                ds_wind = ds_wind
+            )
+            eddy.append(eddyi)
+        if rotate_winds:
+            print('Rotate winds')
+            eddyi = transform_winds(
+                # ds,
+                ds_wind,
+                TIME_DX = tracki['time'].values,
+                EDDY_LON = tracki['longitude'].values,
+                EDDY_LAT = tracki['latitude'].values,
+                DOMAIN_HALF_WIDTH_IN_DEGREES = DOMAIN_HALF_WIDTH_IN_DEGREES,
+                EDDY_RADIUS = np.round(tracki['effective_radius'].values / 1000),
+                AVG_WIND_EDDY_RADIUSES = AVG_WIND_EDDY_RADIUSES,
+                RESAMPLE_EDDY_RADIUSES = RESAMPLE_EDDY_RADIUSES,
+                RESAMPLE_DENSITY = RESAMPLE_DENSITY,
+                UPARAM = UPARAM,
+                VPARAM = VPARAM
+            )
+            eddy.append(eddyi)
+
+        eddy = xr.merge(eddy)
+        eddy.coords['obs'] = tracki['obs']
+        if fname_root is not None:
+            #assert isinstance(fname_root,str)
+            #fname = fname_root + '%i.nc' % eddy['obs']
+            print('Saving eddy obs %i to fname %s' % (eddy['obs'], fname))
+            eddy.to_netcdf(fname)
+            N_saved += 1
+        else:
+            eddies.append(eddy)
+    if fname_root is not None:
+        print('Saved %i eddies to disk using pattern %s' % (N_saved,fname_root))
+        return 0
+    else:
+        eddies = xr.concat(eddies,dim='obs')
+        return eddies
