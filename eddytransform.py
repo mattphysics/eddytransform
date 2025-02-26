@@ -10,6 +10,53 @@ import scipy
 import pandas as pd
 import os
 
+def lon_360_to_180(da,lon='lon',inplace=False):
+    '''
+    Convert longitude from (0-360 E) to (180W - 180E)
+    Reference: https://gis.stackexchange.com/a/201793
+    '''
+    if inplace == True:
+        raise ValueError('option inplace=True in not functional, does not sort longitude appropriately.')
+    if not lon in da.coords:
+        print('Try to infer: longitude is named "longitude?"')
+        if not 'longitude' in da.coords:
+            print('Cannot find coordinate named "lon" or "longitude"')
+            raise ValueError 
+        else:
+            print("Found coordinate 'longitude'")
+            lon = 'longitude'
+    if inplace == True:
+        da[lon] = np.mod(da[lon] + 180, 360) - 180
+        da = da.sortby(lon)
+    else:
+        lon_attrs = da[lon].attrs
+        da_out = da.assign_coords({lon:np.mod(da[lon] + 180, 360) - 180}).sortby(lon)
+        da_out[lon].attrs = lon_attrs
+        return da_out
+
+def lon_180_to_360(da,lon='lon',inplace=False):
+    '''
+    Convert longitude from (180W - 180E) to (0-360 E)
+    Reference: https://gis.stackexchange.com/a/201793
+    '''
+    if inplace == True:
+        raise ValueError('option inplace=True in not functional, does not sort longitude appropriately.')
+    if not lon in da.coords:
+        print('Try to infer: longitude is named "longitude?"')
+        if not 'longitude' in da.coords:
+            print('Cannot find coordinate named "lon" or "longitude"')
+            raise ValueError 
+        else:
+            lon = 'longitude'
+    if inplace == True:
+        da[lon] = np.mod(da[lon], 360)
+        da = da.sortby(lon)
+    else:
+        lon_attrs = da[lon].attrs
+        da_out = da.assign_coords({lon:np.mod(da[lon], 360)}).sortby(lon)
+        da_out[lon].attrs = lon_attrs
+        return da_out
+
 def identify_lontype(ds,lon='lon',lat='lat'):
     '''
     Identify if a Dataset is of type [0 - 360] degree longitude ('360'), or of type [-180 - 180] degree longitude ('180')
@@ -732,40 +779,65 @@ def transform_eddy(
 
 
 
-def get_tracks(kind,source='AVISO'):
-    if source=='AVISO':
-        # catobs = intake.open_catalog('https://raw.githubusercontent.com/eerie-project/intake_catalogues/main/eerie.yaml')\
-                                #   ['dkrz']['disk']['observations']
-        if kind == 'anticyclonic':
-            tracks = xr.open_dataset('/ec/fws5/lb/project/eerie/data/AVISO/META3.2_DT_allsat_Anticyclonic_long_19930101_20220209.nc')
-        elif kind == 'cyclonic':
-            tracks = xr.open_dataset('/ec/fws5/lb/project/eerie/data/AVISO/META3.2_DT_allsat_Cyclonic_long_19930101_20220209.nc')
-        # tracks = catobs['AVISO']['eddy-tracks'][kind].to_dask()
-        tracks['time'].values = pd.to_datetime(tracks.time)
+def get_tracks(kind,source='AVISO',platform='ATOS',path=None):
+    '''
+    Load eddy tracks 
+    Option 1: specify 
+        - kind (cyclonic, anticyclonic)
+        - source (AVISO)
+        - platform (ATOS, Levante)
+    Option 2: specify
+        - path: filepath on the current system
+    '''
 
-        tracks['obs'] = np.arange(tracks['obs'].size)
+    if path is not None:
+        tracks = xr.open_dataset(path)
 
-        tracks['year'] = tracks['time.year']
-        return tracks
+    if not kind in ['cyclonic','anticylonic']:
+        raise ValueError('kind %s is not defined' % kind)
+    if not source in ['AVISO']:
+        raise ValueError('source %s is not defined' % source)
+    if not platform in ['ATOS','Levante']:
+        raise ValueError('platform %s is not defined' % platform)
+
+    if source == 'AVISO':
+        if platform == 'ATOS':
+            if kind == 'anticyclonic':
+                tracks = xr.open_dataset('/ec/fws5/lb/project/eerie/data/AVISO/META3.2_DT_allsat_Anticyclonic_long_19930101_20220209.nc')
+            elif kind == 'cyclonic':
+                tracks = xr.open_dataset('/ec/fws5/lb/project/eerie/data/AVISO/META3.2_DT_allsat_Cyclonic_long_19930101_20220209.nc')
+
+        elif platform == 'Levante':
+            import intake
+            catobs = intake.open_catalog('https://raw.githubusercontent.com/eerie-project/intake_catalogues/main/eerie.yaml')\
+                                    ['dkrz']['disk']['observations']
+            tracks = catobs['AVISO']['eddy-tracks'][kind].to_dask()
+
+    tracks['time'].values = pd.to_datetime(tracks.time)
+    tracks['obs'] = np.arange(tracks['obs'].size)
+    tracks['year'] = tracks['time.year']
+    return tracks
 
 def load_eddy_tracks(
     kind,
     source='AVISO',
+    platform='ATOS',
+    path=None,
     thin_by_obs=1,  # keep every nth observation
     thin_by_date=1, # keep every nth date (in the tracks) to better sample variability
     thin_by_eddy=1  # for each eddy, keep only every nth date
 ):
-    tracks0 = get_tracks(kind,source=source)
+    tracks0 = get_tracks(kind=kind,source=source,platform=platform,path=path)
     tracks0['time'] = tracks0['time'] + pd.Timedelta('12h')
 
     if thin_by_obs > 1:
         tracks0 = tracks0.sel(obs=slice(0,None,thin_by_obs))
 
     if thin_by_date > 1:
-        raise ValueError('not defined')
+        raise ValueError('not yet defined')
 
     if thin_by_eddy > 1:
-        raise ValueError('not defined')
+        raise ValueError('not yet defined')
 
     return tracks0
 
