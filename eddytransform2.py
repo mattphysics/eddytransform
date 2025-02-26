@@ -824,13 +824,7 @@ def loop_over_eddies(
         if fname_root is not None:
             assert isinstance(fname_root,str)
             fname = fname_root + '%i.nc' % tracki['obs']
-
-            # Check if already moved into 'saved' subdirectory
-            fname_saved_split = fname.split('/')
-            fname_saved_split.insert(-1,'saved')
-            fname_saved = '/'.join(fname_saved_split)
-
-            if os.path.exists(fname) or os.path.exists(fname_saved):
+            if os.path.exists(fname):
                 print('File exists for obs=%i, continue...' % tracki['obs'])
                 continue
 

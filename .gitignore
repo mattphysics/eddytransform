@@ -1,3 +1,11 @@
+
+# Custom edits
+*.out
+*.err
+
+*.backup
+*.swo
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
