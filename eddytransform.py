@@ -10,7 +10,7 @@ import scipy
 import pandas as pd
 import os
 
-def lon_360_to_180(da,lon='lon',inplace=False):
+def lon_360_to_180(da,lon='lon',inplace=False,sort=True):
     '''
     Convert longitude from (0-360 E) to (180W - 180E)
     Reference: https://gis.stackexchange.com/a/201793
@@ -27,14 +27,19 @@ def lon_360_to_180(da,lon='lon',inplace=False):
             lon = 'longitude'
     if inplace == True:
         da[lon] = np.mod(da[lon] + 180, 360) - 180
-        da = da.sortby(lon)
+        if sort:
+            print('Re-sorting by new longitudes (-180 - 180 E)')
+            da = da.sortby(lon)
     else:
         lon_attrs = da[lon].attrs
-        da_out = da.assign_coords({lon:np.mod(da[lon] + 180, 360) - 180}).sortby(lon)
+        da_out = da.assign_coords({lon:np.mod(da[lon] + 180, 360) - 180})
+        if sort:
+            print('Re-sorting by new longitudes (-180 - 180 E)')
+            da_out = da_out.sortby(lon)
         da_out[lon].attrs = lon_attrs
         return da_out
 
-def lon_180_to_360(da,lon='lon',inplace=False):
+def lon_180_to_360(da,lon='lon',inplace=False,sort=True):
     '''
     Convert longitude from (180W - 180E) to (0-360 E)
     Reference: https://gis.stackexchange.com/a/201793
@@ -50,12 +55,18 @@ def lon_180_to_360(da,lon='lon',inplace=False):
             lon = 'longitude'
     if inplace == True:
         da[lon] = np.mod(da[lon], 360)
-        da = da.sortby(lon)
+        if sort:
+            print('Re-sorting by new longitudes (0 - 360 E)')
+            da = da.sortby(lon)
     else:
         lon_attrs = da[lon].attrs
-        da_out = da.assign_coords({lon:np.mod(da[lon], 360)}).sortby(lon)
+        da_out = da.assign_coords({lon:np.mod(da[lon], 360)})
+        if sort:
+            print('Re-sorting by new longitudes (0 - 360 E)')
+            da_out = da_out.sortby(lon)
         da_out[lon].attrs = lon_attrs
         return da_out
+
 
 def identify_lontype(ds,lon='lon',lat='lat'):
     '''
@@ -71,6 +82,7 @@ def identify_lontype(ds,lon='lon',lat='lat'):
         raise ValueError('inconsistent')
     elif (ds[lon].max() > 180 and ds[lon].min() < 0):
         raise ValueError('inconsistent')
+    print('lontype identified as %s' % lontype)
     return lontype
 
 def sel_region(ds,LON_CENTER,LAT_CENTER,DOMAIN_HALF_WIDTH_IN_DEGREES,lontype=None,lon='lon',lat='lat'):
@@ -85,9 +97,11 @@ def sel_region(ds,LON_CENTER,LAT_CENTER,DOMAIN_HALF_WIDTH_IN_DEGREES,lontype=Non
         print('lontype = %s is enforced' % lontype)
         
     if lontype == '180':
-        ds_region = sel_region_180(ds,LON_CENTER,LAT_CENTER,DOMAIN_HALF_WIDTH_IN_DEGREES)
+        # ds_region = sel_region_180(ds,LON_CENTER,LAT_CENTER,DOMAIN_HALF_WIDTH_IN_DEGREES)#! # FIX THIS!!!
+        ds_region = sel_region_180(ds,np.mod(LON_CENTER + 180, 360) - 180,LAT_CENTER,DOMAIN_HALF_WIDTH_IN_DEGREES)
     elif lontype == '360':
-        ds_region = sel_region_360(ds,LON_CENTER,LAT_CENTER,DOMAIN_HALF_WIDTH_IN_DEGREES)
+        # ds_region = sel_region_360(ds,LON_CENTER,LAT_CENTER,DOMAIN_HALF_WIDTH_IN_DEGREES)#! # FIX THIS!!!
+        ds_region = sel_region_360(ds,np.mod(LON_CENTER,360),LAT_CENTER,DOMAIN_HALF_WIDTH_IN_DEGREES)
     else:
         raise ValueError('lontype = %s is not defined' % lontype)
 
@@ -95,33 +109,10 @@ def sel_region(ds,LON_CENTER,LAT_CENTER,DOMAIN_HALF_WIDTH_IN_DEGREES,lontype=Non
         assert identify_lontype(ds_region) == lontype
     return ds_region
 
-def get_box_native(ds,x0,x1,y0,y1,lon='lon',lat='lat',dim='value',to180=False):
-    '''
-    Extract a box on a native grid
-    '''
-    print('get box: [x0,x1,y0,y1]: [%s,%s,%s,%s]' % (x0,x1,y0,y1))
-    coords = {
-        lon:ds[lon].load(),
-        lat:ds[lat].load()
-    }
-    if to180:
-        coords[lon] = np.mod(coords[lon] + 180, 360) - 180
-    return ds.sel(
-        {
-            dim : ( 
-                (coords[lat] >= y0) 
-                & (coords[lat] <= y1) 
-                & (coords[lon] >= x0) 
-                & (coords[lon] <= x1) 
-            ) 
-        }
-    )
-
 def identify_gridtype(ds,lon='lon',lat='lat'):
     '''
     decide on whether regular or non-regular grid
     '''
-    # if len(ds[lon].shape) == 1 and len(ds[lat].shape) == 1:
     if lon in ds.dims and lat in ds.dims: # regular
         print('assume regular grid')
         gridtype = 'regular'
@@ -129,24 +120,6 @@ def identify_gridtype(ds,lon='lon',lat='lat'):
         print('assume non-regular grid')
         gridtype = 'irregular'
     return gridtype
-
-def sel_box(ds,x0,x1,y0,y1,lon='lon',lat='lat',gridtype=None):
-    '''
-    select a lat-lon box from a dataset, decide on whether regular or non-regular grid
-    '''
-    if gridtype == None:
-        gridtype = identify_gridtype(ds,lon=lon,lat=lat)
-        print('assume %s grid' % gridtype)
-
-    if gridtype == 'regular':
-        ds_out = ds.sel({lon:slice(x0,x1),lat:slice(y0,y1)})
-    elif gridtype == 'irregular':
-        ds_out = get_box_native(ds,x0,x1,y0,y1,lon=lon,lat=lat)
-    else: 
-        raise ValueError('gridtype %s is not valid' % gridtype)
-
-    return ds_out
-
 
 def sel_region_180(ds,LON_CENTER,LAT_CENTER,DOMAIN_HALF_WIDTH_IN_DEGREES):
     '''
@@ -189,49 +162,6 @@ def sel_region_180(ds,LON_CENTER,LAT_CENTER,DOMAIN_HALF_WIDTH_IN_DEGREES):
         )
     return ds_region
 
-# def sel_region_180(ds,LON_CENTER,LAT_CENTER,DOMAIN_HALF_WIDTH_IN_DEGREES):
-#     '''
-#     select region centered on a coordinate if longitude is [-180, 180]
-#     '''
-
-#     ds_region = ds.sel(
-#         lon=slice(LON_CENTER-DOMAIN_HALF_WIDTH_IN_DEGREES, LON_CENTER+DOMAIN_HALF_WIDTH_IN_DEGREES),
-#         lat=slice(LAT_CENTER-DOMAIN_HALF_WIDTH_IN_DEGREES, LAT_CENTER+DOMAIN_HALF_WIDTH_IN_DEGREES),
-#     )
-
-#     if (LON_CENTER-DOMAIN_HALF_WIDTH_IN_DEGREES)<-180:
-#         print('concat left')
-#         ds_left = ds.sel(
-#                 lon=slice(180+(LON_CENTER-DOMAIN_HALF_WIDTH_IN_DEGREES), 180),
-#                 lat=slice(LAT_CENTER-DOMAIN_HALF_WIDTH_IN_DEGREES, LAT_CENTER+DOMAIN_HALF_WIDTH_IN_DEGREES),
-#         )
-#         ds_left = ds_left.assign_coords(lon=ds_left['lon']-360)
-    
-#         ds_region = xr.concat(
-#             [
-#                 ds_left,
-#                 ds_region
-#             ],
-#             dim='lon'
-#         )
-#     elif (LON_CENTER+DOMAIN_HALF_WIDTH_IN_DEGREES)>180:
-#         print('concat right')
-#         ds_right = ds.sel(
-#                 lon=slice(-180,(LON_CENTER+DOMAIN_HALF_WIDTH_IN_DEGREES)-360),
-#                 lat=slice(LAT_CENTER-DOMAIN_HALF_WIDTH_IN_DEGREES, LAT_CENTER+DOMAIN_HALF_WIDTH_IN_DEGREES),
-#         )
-#         ds_right = ds_right.assign_coords(lon=ds_right['lon']+360)
-    
-        
-#         ds_region = xr.concat(
-#             [
-#                 ds_region,
-#                 ds_right
-#             ],
-#             dim='lon'
-#         )
-
-#     return ds_region
 
 def sel_region_360(ds,LON_CENTER,LAT_CENTER,DOMAIN_HALF_WIDTH_IN_DEGREES):
     '''
@@ -274,49 +204,63 @@ def sel_region_360(ds,LON_CENTER,LAT_CENTER,DOMAIN_HALF_WIDTH_IN_DEGREES):
         )
     return ds_region
 
-# def sel_region_360(ds,LON_CENTER,LAT_CENTER,DOMAIN_HALF_WIDTH_IN_DEGREES):
-#     '''
-#     select region centered on a coordinate if longitude is [0, 360]
-#     '''
+def sel_box(ds,x0,x1,y0,y1,lon='lon',lat='lat',gridtype=None):
+    '''
+    select a lat-lon box from a dataset, decide on whether regular or non-regular grid
+    '''
+    if gridtype == None:
+        gridtype = identify_gridtype(ds,lon=lon,lat=lat)
+        print('assume %s grid' % gridtype)
 
-#     ds_region = ds.sel(
-#         lon=slice(LON_CENTER-DOMAIN_HALF_WIDTH_IN_DEGREES, LON_CENTER+DOMAIN_HALF_WIDTH_IN_DEGREES),
-#         lat=slice(LAT_CENTER-DOMAIN_HALF_WIDTH_IN_DEGREES, LAT_CENTER+DOMAIN_HALF_WIDTH_IN_DEGREES),
-#     )
-    
-#     if (LON_CENTER-DOMAIN_HALF_WIDTH_IN_DEGREES)<0:
-#         print('concat left')
-#         ds_left = ds.sel(
-#                 lon=slice(360+(LON_CENTER-DOMAIN_HALF_WIDTH_IN_DEGREES), 360),
-#                 lat=slice(LAT_CENTER-DOMAIN_HALF_WIDTH_IN_DEGREES, LAT_CENTER+DOMAIN_HALF_WIDTH_IN_DEGREES),
-#         )
-#         ds_left = ds_left.assign_coords(lon=ds_left['lon']-360)
-    
-#         ds_region = xr.concat(
-#             [
-#                 ds_left,
-#                 ds_region
-#             ],
-#             dim='lon'
-#         )
-#     elif (LON_CENTER+DOMAIN_HALF_WIDTH_IN_DEGREES)>360:
-#         print('concat right')
-#         ds_right = ds.sel(
-#                 lon=slice(0,(LON_CENTER+DOMAIN_HALF_WIDTH_IN_DEGREES)-360),
-#                 lat=slice(LAT_CENTER-DOMAIN_HALF_WIDTH_IN_DEGREES, LAT_CENTER+DOMAIN_HALF_WIDTH_IN_DEGREES),
-#         )
-#         ds_right = ds_right.assign_coords(lon=ds_right['lon']+360)
-    
-        
-#         ds_region = xr.concat(
-#             [
-#                 ds_region,
-#                 ds_right
-#             ],
-#             dim='lon'
-#         )
+    if gridtype == 'regular':
+        ds_out = ds.sel({lon:slice(x0,x1),lat:slice(y0,y1)})
+    elif gridtype == 'irregular':
+        ds_out = get_box_native(ds,x0,x1,y0,y1,lon=lon,lat=lat)
+    else: 
+        raise ValueError('gridtype %s is not valid' % gridtype)
 
-#     return ds_region
+    return ds_out
+
+def get_box_native(ds,x0,x1,y0,y1,lon='lon',lat='lat',dim='value',to180=False):
+    '''
+    Extract a box on a native grid
+    '''
+    print('get box: [x0,x1,y0,y1]: [%s,%s,%s,%s]' % (x0,x1,y0,y1))
+    coords = {
+        lon:ds[lon].load(),
+        lat:ds[lat].load()
+    }
+    if to180:
+        coords[lon] = np.mod(coords[lon] + 180, 360) - 180
+    return ds.sel(
+        {
+            dim : ( 
+                (coords[lat] >= y0) 
+                & (coords[lat] <= y1) 
+                & (coords[lon] >= x0) 
+                & (coords[lon] <= x1) 
+            ) 
+        }
+    )
+
+
+def fix_longitude(ds,EDDY_LON):
+    '''Ensure that EDDY_LON is in identified format (180 or 360)'''
+    lontype = identify_lontype(ds=ds)
+    if lontype == '180':
+        if not ( (EDDY_LON >= -180) & (EDDY_LON <= 180) ):
+            print('adjust EDDY_LON to fit lontype == \'180\'')
+            EDDY_LON = np.mod(EDDY_LON + 180, 360) - 180
+            print('EDDY_LON = %.1f' % EDDY_LON)
+            assert (EDDY_LON >= -180) & (EDDY_LON <= 180)
+    elif lontype == '360':
+        if not ( (EDDY_LON >= 0) & (EDDY_LON <= 360) ):
+            print('adjust EDDY_LON to fit lontype == \'360\'')
+            EDDY_LON = np.mod(EDDY_LON, 360)
+            print('EDDY_LON = %.1f' % EDDY_LON)
+            assert (EDDY_LON >= 0) & (EDDY_LON <= 360)
+    return EDDY_LON
+
 
 def all_equal(arr, tolerance=1e-6):
     """ Return True if all values are equal within the specified tolerance.
@@ -617,12 +561,8 @@ def transform_sample_point(
     RESAMPLE_DENSITY = 30, # Number of data points per eddy radius in transformed composite coordinates.
     UPARAM = "avg_10u", 
     VPARAM = "avg_10v",
-    ds_wind=None
+    ds_wind = None
 ):
-    # ds_region = ds.sel(time=TIME_DX).sel(
-    #     lon=slice(EDDY_LON-DOMAIN_HALF_WIDTH_IN_DEGREES, EDDY_LON+DOMAIN_HALF_WIDTH_IN_DEGREES),
-    #     lat=slice(EDDY_LAT-DOMAIN_HALF_WIDTH_IN_DEGREES, EDDY_LAT+DOMAIN_HALF_WIDTH_IN_DEGREES),
-    # )
     ds_region = sel_region(
         ds.sel(time=TIME_DX),
         LON_CENTER=EDDY_LON,
@@ -649,9 +589,6 @@ def transform_sample_point(
         ds_region_wind = ds_region
         x_wind, y_wind = x, y
     else:
-        # ds_region_wind = ds_wind.sel(time=TIME_DX).sel(
-        #     lon=slice(EDDY_LON-DOMAIN_HALF_WIDTH_IN_DEGREES, EDDY_LON+DOMAIN_HALF_WIDTH_IN_DEGREES),
-        #     lat=slice(EDDY_LAT-DOMAIN_HALF_WIDTH_IN_DEGREES, EDDY_LAT+DOMAIN_HALF_WIDTH_IN_DEGREES),
         ds_region_wind = sel_region(
             ds_wind.sel(time=TIME_DX),
             LON_CENTER=EDDY_LON,
@@ -720,10 +657,6 @@ def eddy_calc_wind_direction(
     VPARAM = "avg_10v"
 ):
 
-    # ds_region = ds.sel(time=TIME_DX).sel(
-    #     lon=slice(EDDY_LON-DOMAIN_HALF_WIDTH_IN_DEGREES, EDDY_LON+DOMAIN_HALF_WIDTH_IN_DEGREES),
-    #     lat=slice(EDDY_LAT-DOMAIN_HALF_WIDTH_IN_DEGREES, EDDY_LAT+DOMAIN_HALF_WIDTH_IN_DEGREES),
-    # )
     ds_region = sel_region(
         ds.sel(time=TIME_DX),
         LON_CENTER=EDDY_LON,
@@ -770,10 +703,6 @@ def rotate_winds_point(
     VPARAM = "avg_10v"
 ):
 
-    # ds_region = ds.sel(time=TIME_DX).sel(
-    #     lon=slice(EDDY_LON-DOMAIN_HALF_WIDTH_IN_DEGREES, EDDY_LON+DOMAIN_HALF_WIDTH_IN_DEGREES),
-    #     lat=slice(EDDY_LAT-DOMAIN_HALF_WIDTH_IN_DEGREES, EDDY_LAT+DOMAIN_HALF_WIDTH_IN_DEGREES),
-    # )
     ds_region = sel_region(
         ds.sel(time=TIME_DX),
         LON_CENTER=EDDY_LON,
@@ -871,6 +800,9 @@ def transform_winds(
         VPARAM
     ])
 
+    # Ensure consistent longitude formatting
+    EDDY_LON = fix_longitude(ds,EDDY_LON)
+
     transformed_x, transformed_y, resampled_data_in_transformed_coords_u, resampled_data_in_transformed_coords_v = rotate_winds_point(
         ds = ds,
         TIME_DX = TIME_DX,
@@ -942,26 +874,26 @@ def transform_eddy(
         VPARAM
     ])
 
+    # Ensure consistent longitude formatting
+    EDDY_LON = fix_longitude(ds,EDDY_LON)
 
     transformed_x, transformed_y, resampled_data_in_transformed_coords = transform_sample_point(
-    ds = ds,
-    COMPOSITE_PARAM = COMPOSITE_PARAM,
-    TIME_DX = TIME_DX,
-    EDDY_LON = EDDY_LON,
-    EDDY_LAT = EDDY_LAT,
-    DOMAIN_HALF_WIDTH_IN_DEGREES = DOMAIN_HALF_WIDTH_IN_DEGREES,
-    EDDY_RADIUS = EDDY_RADIUS,
-    AVG_WIND_EDDY_RADIUSES = AVG_WIND_EDDY_RADIUSES,
-    RESAMPLE_EDDY_RADIUSES = RESAMPLE_EDDY_RADIUSES,
-    RESAMPLE_DENSITY = RESAMPLE_DENSITY,
-    UPARAM = UPARAM,
-    VPARAM = VPARAM,
-    ds_wind = ds_wind
-)
+        ds = ds,
+        COMPOSITE_PARAM = COMPOSITE_PARAM,
+        TIME_DX = TIME_DX,
+        EDDY_LON = EDDY_LON,
+        EDDY_LAT = EDDY_LAT,
+        DOMAIN_HALF_WIDTH_IN_DEGREES = DOMAIN_HALF_WIDTH_IN_DEGREES,
+        EDDY_RADIUS = EDDY_RADIUS,
+        AVG_WIND_EDDY_RADIUSES = AVG_WIND_EDDY_RADIUSES,
+        RESAMPLE_EDDY_RADIUSES = RESAMPLE_EDDY_RADIUSES,
+        RESAMPLE_DENSITY = RESAMPLE_DENSITY,
+        UPARAM = UPARAM,
+        VPARAM = VPARAM,
+        ds_wind = ds_wind
+    )
 
-    #out = xr.Dataset(coords={'x': transformed_x, 'y': transformed_y})
-    out = xr.Dataset()#coords={'x': transformed_x, 'y': transformed_y})
-    #out[COMPOSITE_PARAM] = xr.DataArray(dims=['x','y'],coords={'x':transformed_x,'y':transformed_y},data=resampled_data_in_transformed_coords)
+    out = xr.Dataset()
     out[COMPOSITE_PARAM] = xr.DataArray(dims=['x','y'],coords={'x':transformed_x,'y':transformed_y},data=resampled_data_in_transformed_coords.T)
 
     out[COMPOSITE_PARAM].attrs = ds[COMPOSITE_PARAM].attrs
@@ -971,7 +903,6 @@ def transform_eddy(
     out['y'].attrs['long_name'] = 'y_coordinate'
     out['y'].attrs['units'] = 'Eddy radii'
 
-    # out = out.transpose()
     out = out.transpose()
 
     out['time'] = TIME_DX
@@ -1099,10 +1030,8 @@ def loop_over_eddies(
 
     eddies = []
     for i in range(N):
-        #print(i)
         tracki = tracks.isel(obs=i)
         print('\n%i , obs = %i' % (i, tracki['obs']))
-        # print(tracki)
         eddy = []
         if fname_root is not None:
             assert isinstance(fname_root,str)
