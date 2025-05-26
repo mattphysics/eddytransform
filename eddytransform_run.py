@@ -13,8 +13,6 @@ xr.set_options(keep_attrs=True)
 
 import eddytransform as et
 import os
-import importlib
-importlib.reload(et)
 
 import argparse
 parser = argparse.ArgumentParser()
@@ -36,6 +34,7 @@ EXP = 'tco1279-eerie_production_202407'
 realization = 1
 extent = [0,360,-60,-25] # None # geographical region to only match eddies in
 freq = '10D' # '1D' # frequency of sampling - default is '10D': pick every 10th day
+Nmax = 10 # None # maximum number of eddies. if not None, pick the first <Nmax> after the other selections have been done. Meant for testing. 
 
 varnames = ['avg_sst','tprate']
 # varnames = ['avg_sst','avg_ci','mean2t','tprate','mslhf','msshf','mean10ws','avg_2sh']#,'avg_10u','avg_10v']
@@ -47,8 +46,12 @@ varnames = ['avg_sst','tprate']
 # 2. output = 'all'
 #          outname is a filename, all eddies are concatenated and writen to <outname>.nc
 
-output  = 'single' # 'all' # write output to one file per eddy, or 'all' at once
+# output  = 'single' # 'all' # write output to one file per eddy, or 'all' at once
 outname = 'eddy_r_%i_' % (realization)  # 'eddies_test.nc'
+
+output  = 'all' # write output to one file per eddy, or 'all' at once
+outname = 'eddies_test.nc'
+
 OUTPUTROOTDIR = '/ec/fws5/lb/project/eerie/output/'
 
 # ===============
@@ -68,14 +71,19 @@ assert output in ['single','all']
 
 assert kind in ['cyclonic','anticyclonic']
 
-if kind == 'anticyclonic':
-    fname_root_dir = OUTPUTROOTDIR + '%s/processed/composites_rot_acyc/' % (EXP)
-    fname_root = fname_root_dir + 'eddy_r_%i_' % (realization)
-elif kind == 'cyclonic':
-    fname_root_dir = OUTPUTROOTDIR + '%s/processed/composites_rot_cyc/' % (EXP)
-    fname_root = fname_root_dir + 'eddy_r_%i_' % (realization)
-else:
-    raise ValueError('kind %s is not defined' % kind)
+if output == 'single':
+    print('Write each eddy into a file, individually')
+    if kind == 'anticyclonic':
+        fname_root_dir = OUTPUTROOTDIR + '%s/processed/composites_rot_acyc/' % (EXP)
+    elif kind == 'cyclonic':
+        fname_root_dir = OUTPUTROOTDIR + '%s/processed/composites_rot_cyc/' % (EXP)
+    else:
+        raise ValueError('kind %s is not defined' % kind)
+    fname_root = fname_root_dir + outname
+elif output == 'all':
+    print('Write all eddies into one file')
+    fname_root = None
+    fname_root_dir = OUTPUTROOTDIR
 
 transform_settings['fname_root'] = fname_root
 
@@ -120,8 +128,12 @@ else:
 dates = pd.date_range('%i-01-01 12:00' % year,'%i-12-31' % year,freq=freq)
 tracks_year_extent_freq = tracks_year_extent.sel(obs=[t in dates for t in tracks_year_extent['time'].values])
 
+if Nmax:
+    print('Picking only the first Nmax = %i eddies' % Nmax)
+    tracks_year_extent_freq = tracks_year_extent_freq.isel(obs=slice(Nmax))
+
 print('Start looping')
-eddies_AG = et.loop_over_eddies(
+eddies = et.loop_over_eddies(
     ds,
     tracks_year_extent_freq,
     varnames,
@@ -129,7 +141,13 @@ eddies_AG = et.loop_over_eddies(
     **transform_settings
 )
 
-print(eddies_AG)
-
+if output == 'single':
+    assert eddies == 0
+    print('Saving eddies individually has been successful: fname_root = %s' % fname_root)
+elif output == 'all':
+    print('Result of compositing: ')
+    print(eddies)
+    print('Saving eddies to: %s%s' % (OUTPUTROOTDIR,outname))
+    eddies.to_netcdf('%s%s' % (OUTPUTROOTDIR,outname))
 
 print('Done')

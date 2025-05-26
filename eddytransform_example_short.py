@@ -12,27 +12,30 @@ import cmocean.cm as cmo
 import cartopy.crs as ccrs
 
 # Specify EERIE data
+gridtype = 'regular' # irregular # is the data on a 'regular' lat on grid or other?
+res = '0.25deg' # 0.1deg
+infilename = 'data/data_0.25deg.nc'
+
 # gridtype = 'regular' # irregular # is the data on a 'regular' lat on grid or other?
-# res = '0.25deg' # 0.1deg
 # res = '0.1deg'
-gridtype = 'irregular' # is the data on a 'regular' lat on grid or other?
-res = 'native'
-# infilename = 'data/data_0.25deg.nc'
 # infilename = 'data/data_0.1deg.nc'
-infilename = 'data/data_native.nc'
+
+# gridtype = 'irregular' # is the data on a 'regular' lat on grid or other?
+# res = 'native'
+# infilename = 'data/data_native.nc'
 
 # time/lon/lat coordinates of imagined eddy
 TIME = '2021-01-11 12:00:00'
-# EDDY_LON = -71
 EDDY_LON = 289
 EDDY_LAT = 39.5
 
 varname = 'avg_sst'
 
 outfilename = 'composite_test_%s.nc' % res
-OUTPUTROOTDIR = 'test7/' #'output/'
-# PLOTDIR = 'test1/' #'plots/'
-PLOTDIR = 'test7/' #'plots/'
+OUTPUTROOTDIR = 'output/'
+PLOTDIR = 'plots/'
+
+fname_out = OUTPUTROOTDIR + outfilename
 
 # ===============
 
@@ -45,8 +48,6 @@ UPARAM = "avg_10u" # zonal surface wind velocity, for eddy rotation
 VPARAM = "avg_10v" # meridional surface wind velocity, for eddy rotation
 
 # ===============
-
-fname_out = OUTPUTROOTDIR + outfilename
 
 # Read & process data 
 print('Open datasets')
@@ -105,7 +106,6 @@ if gridtype == 'irregular':
         ds.sel(
             time=TIME
         ),
-        # 360+EDDY_LON,EDDY_LAT,5
         EDDY_LON,EDDY_LAT,5
     )
     p = ax.scatter(ds_region['lon'],ds_region['lat'],c=ds_region[varname],s=5)
@@ -120,7 +120,6 @@ else:
         ds[varname].sel(
             time=TIME
         ),
-        # 360+EDDY_LON,EDDY_LAT,5
         EDDY_LON,EDDY_LAT,5
     ).plot(transform=ccrs.PlateCarree())
 
@@ -128,7 +127,6 @@ else:
         ds[[UPARAM,VPARAM]].sel(
             time=TIME
         ),
-        # 360+EDDY_LON,EDDY_LAT,5
         EDDY_LON,EDDY_LAT,5
     ).isel(lon=slice(None,None, 2),lat=slice(None,None, 2)).plot.quiver(
         x='lon', y='lat', u='avg_10u', v='avg_10v', scale=100

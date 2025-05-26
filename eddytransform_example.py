@@ -24,6 +24,7 @@ varname = 'avg_sst'
 outfilename = 'composite_test.nc'
 OUTPUTROOTDIR = '/ec/fws5/lb/project/eerie/output/'
 
+fname_out = OUTPUTROOTDIR + outfilename
 # ===============
 
 # Settings for eddy transformation - decent default values
@@ -35,8 +36,6 @@ UPARAM = "avg_10u" # zonal surface wind velocity, for eddy rotation
 VPARAM = "avg_10v" # meridional surface wind velocity, for eddy rotation
 
 # ===============
-
-fname_out = OUTPUTROOTDIR + outfilename
 
 # Read & process data 
 print('Open datasets')
