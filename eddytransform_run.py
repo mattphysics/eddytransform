@@ -47,7 +47,7 @@ varnames = ['avg_sst','tprate']
 #          outname is a filename, all eddies are concatenated and writen to <outname>.nc
 
 # output  = 'single' # 'all' # write output to one file per eddy, or 'all' at once
-outname = 'eddy_r_%i_' % (realization)  # 'eddies_test.nc'
+# outname = 'eddy_r_%i_' % (realization)  # 'eddies_test.nc'
 
 output  = 'all' # write output to one file per eddy, or 'all' at once
 outname = 'eddies_test.nc'
