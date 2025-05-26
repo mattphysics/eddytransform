@@ -2,6 +2,9 @@
 # Custom edits
 *.out
 *.err
+test*/
+data/data_0.1deg.nc
+data/data_native.nc
 
 *.backup
 *.swo
