@@ -27,13 +27,13 @@ print('Process year %i, kind %s' % (year,kind))
 
 # Specify EERIE data
 MODEL='HadGEM3-GC5-EERIE-N640'
-EXP='highresSST-present'
+EXP='highresSST-SmoothAnom'
 DATASET='Aday'
 gridtype = 'regular' # irregular # is the data on a 'regular' lat on grid or other?
 realization = 1
 extent = [0,360,-60,-25] # None # geographical region to only match eddies in
 freq = '10D' # '1D' # frequency of sampling - default is '10D': pick every 10th day
-Nmax = 10 # None # maximum number of eddies. if not None, pick the first <Nmax> after the other selections have been done. Meant for testing. 
+Nmax = None #10 # None # maximum number of eddies. if not None, pick the first <Nmax> after the other selections have been done. Meant for testing. 
 
 varnames = ['ts','pr','hfls']#,'hfss'] # ,'uas','vas'
 
@@ -46,11 +46,11 @@ varnames = ['ts','pr','hfls']#,'hfss'] # ,'uas','vas'
 # 2. output = 'all'
 #          outname is a filename, all eddies are concatenated and writen to <outname>.nc
 
-# output  = 'single' # 'all' # write output to one file per eddy, or 'all' at once
-# outname = 'eddy_r_%i_' % (realization)  # 'eddies_test.nc'
+output  = 'single_var' # 'single' # 'all' # write output to one file per eddy, or 'all' at once
+outname = 'eddy_r_%i_' % (realization)  # 'eddies_test.nc'
 
-output  = 'all' # write output to one file per eddy, or 'all' at once
-outname = 'eddies_test.nc'
+# output  = 'all' # write output to one file per eddy, or 'all' at once
+# outname = 'eddies_test.nc'
 
 OUTPUTROOTDIR = '/gws/nopw/j04/eerie/aengenh/output/'
 
@@ -62,17 +62,18 @@ transform_settings = dict(
     RESAMPLE_EDDY_RADIUSES = 3, # Number of eddy radiuses to sample in transformed composite coordinates.
     RESAMPLE_DENSITY = 30, # Number of data points per eddy radius in transformed composite coordinates.
     UPARAM = "uas", # zonal surface wind velocity, for eddy rotation
-    VPARAM = "vas"  # meridional surface wind velocity, for eddy rotation
+    VPARAM = "vas",  # meridional surface wind velocity, for eddy rotation
+    output = output  # output mode ('single','single_var','all')
 )
 
 # ===============
 
-assert output in ['single','all']
+assert output in ['single','single_var','all']
 
 assert kind in ['cyclonic','anticyclonic']
 
-if output == 'single':
-    print('Write each eddy into a file, individually')
+if output in ['single','single_var']:
+    print('Write each eddy into a file, individually: output = %s' % output)
     if kind == 'anticyclonic':
         fname_root_dir = OUTPUTROOTDIR + '%s/%s/processed/composites_rot_acyc/' % (MODEL,EXP)
     elif kind == 'cyclonic':
@@ -146,7 +147,7 @@ eddies = et.loop_over_eddies(
     **transform_settings
 )
 
-if output == 'single':
+if output in ['single','single_var']:
     assert eddies == 0
     print('Saving eddies individually has been successful: fname_root = %s' % fname_root)
 elif output == 'all':

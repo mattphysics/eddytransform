@@ -9,6 +9,58 @@ import numpy as np
 import scipy
 import pandas as pd
 import os
+from glob import glob
+
+def open_mohc_jasmin(
+    model,
+    exp,
+    stream,
+    varnames=None,
+    sel={}
+):
+    '''
+    Load Met Office output from netcdf files
+    '''
+    path_to_data = '/gws/nopw/j04/eerie/public/data/EERIE/EERIE/MOHC/{model}/{exp}/r1i1p1f1/{stream}'.format(model=model,exp=exp,stream=stream)
+    if varnames is None:
+        varnames = [d.split('/')[-1] for d in sorted(glob('{path}/*'.format(path=path_to_data)))]
+        print('Get all variables')
+    if not isinstance(varnames,list):
+        varnames = [varnames]
+    if sel != {}:
+        print('Sub-select by: %s' % sel)
+        
+    if len(varnames) == 1:
+        varname = varnames[0]
+        print('Get one variable: %s' % varname)
+        pattern = '{path}/{varname}/*/*/*.nc'.format(path=path_to_data,varname=varname)
+        fnames = sorted(glob(pattern))
+        print('Get %i files' % len(fnames))
+        ds = xr.open_mfdataset(fnames,decode_timedelta=True)
+        if 'height' in ds.coords:
+            ds[varname].attrs['height'] = ds['height'].values
+            ds = ds.drop_vars(['height'])
+            ds = ds.sel(sel)
+    else:
+        print('Get variables: %s' % varnames)
+        ds = []
+        for varname in varnames:
+            print(varname)
+            pattern = '{path}/{varname}/*/*/*.nc'.format(path=path_to_data,varname=varname)
+            fnames = sorted(glob(pattern))
+            print('Get %i files' % len(fnames))
+            dsi = xr.open_mfdataset(fnames,decode_timedelta=True)
+            if 'height' in dsi.coords:
+                dsi[varname].attrs['height'] = dsi['height'].values
+                dsi = dsi.drop_vars(['height'])
+            dsi = dsi.sel(sel)
+            ds.append(dsi)
+        print('Merging variables')
+        ds = xr.merge(ds)
+        if 'latitude_longitude' in ds:
+            ds = ds.drop_vars('latitude_longitude')
+            
+    return ds
 
 def lon_360_to_180(da,lon='lon',inplace=False,sort=True):
     '''
@@ -927,7 +979,7 @@ def get_tracks(kind,source='AVISO',platform='ATOS',path=None):
     Option 1: specify 
         - kind (cyclonic, anticyclonic)
         - source (AVISO)
-        - platform (ATOS, Levante)
+        - platform (ATOS, Levante, Jasmin)
     Option 2: specify
         - path: filepath on the current system
     '''
@@ -939,7 +991,7 @@ def get_tracks(kind,source='AVISO',platform='ATOS',path=None):
         raise ValueError('kind %s is not defined' % kind)
     if not source in ['AVISO']:
         raise ValueError('source %s is not defined' % source)
-    if not platform in ['ATOS','Levante']:
+    if not platform in ['ATOS','Levante','Jasmin']:
         raise ValueError('platform %s is not defined' % platform)
 
     if source == 'AVISO':
@@ -948,6 +1000,11 @@ def get_tracks(kind,source='AVISO',platform='ATOS',path=None):
                 tracks = xr.open_dataset('/ec/fws5/lb/project/eerie/data/AVISO/META3.2_DT_allsat_Anticyclonic_long_19930101_20220209.nc')
             elif kind == 'cyclonic':
                 tracks = xr.open_dataset('/ec/fws5/lb/project/eerie/data/AVISO/META3.2_DT_allsat_Cyclonic_long_19930101_20220209.nc')
+        elif platform == 'Jasmin':
+            if kind == 'anticyclonic':
+                tracks = xr.open_dataset('/gws/nopw/j04/eerie/observations/AVISO/META3.2_DT_allsat_Anticyclonic_long_19930101_20220209.nc')
+            elif kind == 'cyclonic':
+                tracks = xr.open_dataset('/gws/nopw/j04/eerie/observations/AVISO/META3.2_DT_allsat_Cyclonic_long_19930101_20220209.nc')
 
         elif platform == 'Levante':
             import intake
@@ -1014,6 +1071,7 @@ def loop_over_eddies(
     rotate_winds = True,
     ds_wind = None,
     fname_root = None,
+    output = 'all', # 'single', 'single_var'
     **kwargs
 ):
 
@@ -1028,7 +1086,11 @@ def loop_over_eddies(
     N_saved = 0
     print('Loop over %i eddies' % N)
 
+    if fname_root == None:
+        output = 'all'
+
     eddies = []
+    print(output)
     for i in range(N):
         tracki = tracks.isel(obs=i)
         print('\n%i , obs = %i' % (i, tracki['obs']))
@@ -1042,11 +1104,17 @@ def loop_over_eddies(
             fname_saved_split.insert(-1,'saved')
             fname_saved = '/'.join(fname_saved_split)
 
-            if os.path.exists(fname) or os.path.exists(fname_saved):
-                print('File exists for obs=%i, continue...' % tracki['obs'])
-                continue
+            if output != 'single_var':
+                if os.path.exists(fname) or os.path.exists(fname_saved):
+                    print('File exists for obs=%i, continue...' % tracki['obs'])
+                    continue
 
         for param in params:
+            if output == 'single_var':
+                fnamei = fname.replace('.nc','_%s.nc' % param)
+                if os.path.exists(fnamei):
+                    print('File exists for obs=%i, param=%s, continue...' % (tracki['obs'],param))
+                    continue
             eddyi = transform_eddy(
                 ds,
                 COMPOSITE_PARAM = param,
@@ -1062,9 +1130,21 @@ def loop_over_eddies(
                 VPARAM = VPARAM,
                 ds_wind = ds_wind
             )
-            eddy.append(eddyi)
+            if output == 'single_var':
+                print(fname, param)
+                # fnamei = fname.replace('.nc','_%s.nc' % param)
+                eddyi.coords['obs'] = tracki['obs']
+                print('Saving eddy obs %i, variable %s to fname %s' % (eddyi['obs'], param, fnamei))
+                eddyi.to_netcdf(fnamei)
+            else:
+                eddy.append(eddyi)
         if rotate_winds:
             print('Rotate winds')
+            if output == 'single_var':
+                fnamei = fname.replace('.nc','_%s.nc' % 'uv')
+                if os.path.exists(fnamei):
+                    print('File exists for obs=%i, param=%s, continue...' % (tracki['obs'],'uv'))
+                    continue
             eddyi = transform_winds(
                 # ds,
                 ds_wind,
@@ -1079,18 +1159,23 @@ def loop_over_eddies(
                 UPARAM = UPARAM,
                 VPARAM = VPARAM
             )
-            eddy.append(eddyi)
+            if output == 'single_var':
+                fnamei = fname.replace('.nc','_%s.nc' % 'uv')
+                eddyi.coords['obs'] = tracki['obs']
+                print('Saving eddy obs %i, variable %s to fname %s' % (eddyi['obs'], 'uv', fnamei))
+                eddyi.to_netcdf(fnamei)
+            else:
+                eddy.append(eddyi)
 
-        eddy = xr.merge(eddy)
-        eddy.coords['obs'] = tracki['obs']
-        if fname_root is not None:
-            #assert isinstance(fname_root,str)
-            #fname = fname_root + '%i.nc' % eddy['obs']
-            print('Saving eddy obs %i to fname %s' % (eddy['obs'], fname))
-            eddy.to_netcdf(fname)
-            N_saved += 1
-        else:
-            eddies.append(eddy)
+        if output != 'single_var':
+            eddy = xr.merge(eddy)
+            eddy.coords['obs'] = tracki['obs']
+            if fname_root is not None:
+                print('Saving eddy obs %i to fname %s' % (eddy['obs'], fname))
+                eddy.to_netcdf(fname)
+            else:
+                eddies.append(eddy)
+        N_saved += 1
     if fname_root is not None:
         print('Saved %i eddies to disk using pattern %s' % (N_saved,fname_root))
         return 0
