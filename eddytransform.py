@@ -1110,62 +1110,74 @@ def loop_over_eddies(
                     continue
 
         for param in params:
+            compute_var = True
             if output == 'single_var':
                 fnamei = fname.replace('.nc','_%s.nc' % param)
-                if os.path.exists(fnamei):
+                fnamei_saved = fnamei.split('/')
+                fnamei_saved.insert(-1,'saved')
+                fnamei_saved = '/'.join(fnamei_saved)
+                if os.path.exists(fnamei) or os.path.exists(fnamei_saved):
                     print('File exists for obs=%i, param=%s, continue...' % (tracki['obs'],param))
-                    continue
-            eddyi = transform_eddy(
-                ds,
-                COMPOSITE_PARAM = param,
-                TIME_DX = tracki['time'].values,
-                EDDY_LON = tracki['longitude'].values,
-                EDDY_LAT = tracki['latitude'].values,
-                DOMAIN_HALF_WIDTH_IN_DEGREES = DOMAIN_HALF_WIDTH_IN_DEGREES,
-                EDDY_RADIUS = np.round(tracki['effective_radius'].values / 1000),
-                AVG_WIND_EDDY_RADIUSES = AVG_WIND_EDDY_RADIUSES,
-                RESAMPLE_EDDY_RADIUSES = RESAMPLE_EDDY_RADIUSES,
-                RESAMPLE_DENSITY = RESAMPLE_DENSITY,
-                UPARAM = UPARAM,
-                VPARAM = VPARAM,
-                ds_wind = ds_wind
-            )
-            if output == 'single_var':
-                print(fname, param)
-                # fnamei = fname.replace('.nc','_%s.nc' % param)
-                eddyi.coords['obs'] = tracki['obs']
-                print('Saving eddy obs %i, variable %s to fname %s' % (eddyi['obs'], param, fnamei))
-                eddyi.to_netcdf(fnamei)
-            else:
-                eddy.append(eddyi)
+                    # continue
+                    compute_var = False
+            if compute_var == True:
+                eddyi = transform_eddy(
+                    ds,
+                    COMPOSITE_PARAM = param,
+                    TIME_DX = tracki['time'].values,
+                    EDDY_LON = tracki['longitude'].values,
+                    EDDY_LAT = tracki['latitude'].values,
+                    DOMAIN_HALF_WIDTH_IN_DEGREES = DOMAIN_HALF_WIDTH_IN_DEGREES,
+                    EDDY_RADIUS = np.round(tracki['effective_radius'].values / 1000),
+                    AVG_WIND_EDDY_RADIUSES = AVG_WIND_EDDY_RADIUSES,
+                    RESAMPLE_EDDY_RADIUSES = RESAMPLE_EDDY_RADIUSES,
+                    RESAMPLE_DENSITY = RESAMPLE_DENSITY,
+                    UPARAM = UPARAM,
+                    VPARAM = VPARAM,
+                    ds_wind = ds_wind
+                )
+                if output == 'single_var':
+                    print(fname, param)
+                    # fnamei = fname.replace('.nc','_%s.nc' % param)
+                    eddyi.coords['obs'] = tracki['obs']
+                    print('Saving eddy obs %i, variable %s to fname %s' % (eddyi['obs'], param, fnamei))
+                    eddyi.to_netcdf(fnamei)
+                else:
+                    eddy.append(eddyi)
         if rotate_winds:
             print('Rotate winds')
+            compute_var = True
             if output == 'single_var':
                 fnamei = fname.replace('.nc','_%s.nc' % 'uv')
-                if os.path.exists(fnamei):
+                fnamei_saved = fnamei.split('/')
+                fnamei_saved.insert(-1,'saved')
+                fnamei_saved = '/'.join(fnamei_saved)
+                if os.path.exists(fnamei) or os.path.exists(fnamei_saved):
                     print('File exists for obs=%i, param=%s, continue...' % (tracki['obs'],'uv'))
-                    continue
-            eddyi = transform_winds(
-                # ds,
-                ds_wind,
-                TIME_DX = tracki['time'].values,
-                EDDY_LON = tracki['longitude'].values,
-                EDDY_LAT = tracki['latitude'].values,
-                DOMAIN_HALF_WIDTH_IN_DEGREES = DOMAIN_HALF_WIDTH_IN_DEGREES,
-                EDDY_RADIUS = np.round(tracki['effective_radius'].values / 1000),
-                AVG_WIND_EDDY_RADIUSES = AVG_WIND_EDDY_RADIUSES,
-                RESAMPLE_EDDY_RADIUSES = RESAMPLE_EDDY_RADIUSES,
-                RESAMPLE_DENSITY = RESAMPLE_DENSITY,
-                UPARAM = UPARAM,
-                VPARAM = VPARAM
-            )
-            if output == 'single_var':
-                fnamei = fname.replace('.nc','_%s.nc' % 'uv')
-                eddyi.coords['obs'] = tracki['obs']
-                print('Saving eddy obs %i, variable %s to fname %s' % (eddyi['obs'], 'uv', fnamei))
-                eddyi.to_netcdf(fnamei)
-            else:
-                eddy.append(eddyi)
+                    # continue
+                    compute_var = False
+            if compute_var == True:
+                eddyi = transform_winds(
+                    # ds,
+                    ds_wind,
+                    TIME_DX = tracki['time'].values,
+                    EDDY_LON = tracki['longitude'].values,
+                    EDDY_LAT = tracki['latitude'].values,
+                    DOMAIN_HALF_WIDTH_IN_DEGREES = DOMAIN_HALF_WIDTH_IN_DEGREES,
+                    EDDY_RADIUS = np.round(tracki['effective_radius'].values / 1000),
+                    AVG_WIND_EDDY_RADIUSES = AVG_WIND_EDDY_RADIUSES,
+                    RESAMPLE_EDDY_RADIUSES = RESAMPLE_EDDY_RADIUSES,
+                    RESAMPLE_DENSITY = RESAMPLE_DENSITY,
+                    UPARAM = UPARAM,
+                    VPARAM = VPARAM
+                )
+                if output == 'single_var':
+                    fnamei = fname.replace('.nc','_%s.nc' % 'uv')
+                    eddyi.coords['obs'] = tracki['obs']
+                    print('Saving eddy obs %i, variable %s to fname %s' % (eddyi['obs'], 'uv', fnamei))
+                    eddyi.to_netcdf(fnamei)
+                else:
+                    eddy.append(eddyi)
 
         if output != 'single_var':
             eddy = xr.merge(eddy)

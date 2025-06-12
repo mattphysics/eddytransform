@@ -18,12 +18,25 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('year')
 parser.add_argument('kind')
+parser.add_argument('--vn',default=None)
+parser.add_argument('--rw',default=None)
 args = parser.parse_args()
 
 year = int(args.year)
 kind = args.kind
+vn = args.vn
+rw = args.rw
 
-print('Process year %i, kind %s' % (year,kind))
+print(args)
+
+if rw == '0':
+    print('rotate_wind = False')
+    rotate_winds = False
+else:
+    print('rotate_wind = True')
+    rotate_winds = True
+
+print('Process year %i, kind %s, vn %s, rotate_winds= %s' % (year,kind,vn,rotate_winds))
 
 # Specify EERIE data
 MODEL='HadGEM3-GC5-EERIE-N640'
@@ -35,7 +48,21 @@ extent = [0,360,-60,-25] # None # geographical region to only match eddies in
 freq = '10D' # '1D' # frequency of sampling - default is '10D': pick every 10th day
 Nmax = None #10 # None # maximum number of eddies. if not None, pick the first <Nmax> after the other selections have been done. Meant for testing. 
 
-varnames = ['ts','pr','hfls']#,'hfss'] # ,'uas','vas'
+if vn != None:
+    varnames = [vn]
+else:
+    varnames = ['ts','pr','hfls','hfss'] # ,'uas','vas'
+
+if vn == 'sfcWind':
+    print("vn == 'sfcWind' : construct from uas and vas")
+    varnames = []
+
+# print(args)
+# print(rotate_winds)
+# print(varnames)
+# import sys
+# sys.exit()
+
 
 # varnames = ['avg_sst','avg_ci','mean2t','tprate','mslhf','msshf','mean10ws','avg_2sh']#,'avg_10u','avg_10v']
 #varname = 'avg_2sh' # 'mean10ws' #'msshf' # 'mslhf' # 'tprate' #'mean2t' # 'avg_ci'#'avg_sst' #'mean2t' #'avg_2sh' 'avg_10v'
@@ -63,7 +90,8 @@ transform_settings = dict(
     RESAMPLE_DENSITY = 30, # Number of data points per eddy radius in transformed composite coordinates.
     UPARAM = "uas", # zonal surface wind velocity, for eddy rotation
     VPARAM = "vas",  # meridional surface wind velocity, for eddy rotation
-    output = output  # output mode ('single','single_var','all')
+    output = output,  # output mode ('single','single_var','all')
+    rotate_winds = rotate_winds # also computed rotated wind field and save as well
 )
 
 # ===============
@@ -101,6 +129,10 @@ ds = et.open_mohc_jasmin(
     varnames + [transform_settings['UPARAM'],transform_settings['VPARAM']],
     sel=dict(time=slice('2000','2009'))
 )
+if vn == 'sfcWind':
+    ds['sfcWind'] = (ds['uas']**2 + ds['vas']**2)**0.5
+    varnames = ['sfcWind']
+
 
 # if gridtype == 'regular':
 #     print('Reshape regular catalog to 2D coordinates')
@@ -143,7 +175,7 @@ eddies = et.loop_over_eddies(
     ds,
     tracks_year_extent_freq,
     varnames,
-    rotate_winds = True,
+    # rotate_winds = True,
     **transform_settings
 )
 

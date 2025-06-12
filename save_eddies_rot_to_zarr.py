@@ -19,8 +19,9 @@ import time as T
 # EXP = 'tco399-eerie_production_202407'
 MODEL = 'HadGEM3-GC5-EERIE-N640'
 EXP   = 'highresSST-SmoothAnom'
-kind  = 'anticyclonic'
-# kind = 'cyclonic'
+# EXP   = 'highresSST-present'
+# kind  = 'anticyclonic'
+kind = 'cyclonic'
 realization = 1
 print(EXP,kind)
 
@@ -31,9 +32,9 @@ T.sleep(3)
 
 
 if kind == 'anticyclonic':
-    path = '/gws/nopw/j04/eerie/aengenh/output/{MODEL}/{EXP}/processed/composites_rot_acyc/'
+    path = '/gws/nopw/j04/eerie/aengenh/output/{MODEL}/{EXP}/processed/composites_rot_acyc/'.format(MODEL=MODEL,EXP=EXP)
 elif kind == 'cyclonic':
-    path = '/gws/nopw/j04/eerie/aengenh/output/{MODEL}/{EXP}/processed/composites_rot_cyc/'
+    path = '/gws/nopw/j04/eerie/aengenh/output/{MODEL}/{EXP}/processed/composites_rot_cyc/'.format(MODEL=MODEL,EXP=EXP)
 else:
     raise ValueError('kind %s is not defined' % kind)
 
@@ -45,11 +46,17 @@ df['varname'] = df['fname'].str.split('_').str[-1].str.split('.').str[0]
 df['realization'] = df['fname'].str.split('/').str[-1].str.split('_').str[2]
 varnames = df['varname'].unique().tolist()
 Nvar = len(varnames)
-df_filtered = df.groupby('obs').filter(lambda x: len(x) == Nvar)
+df_filtered = df.groupby('obs').filter(lambda x: len(x) == Nvar)#.sortby('obs')
+df_filtered['obs'] = df_filtered['obs'].astype('int')
+
+# check that data is complete
+df_no = df.groupby('obs').filter(lambda x: len(x) != Nvar)
+assert len(df_no)==0
 
 fnames = df_filtered['fname'].values.tolist()
+obs = sorted(df_filtered['obs'].unique().tolist())
 
-N = len(fnames)
+N = len(obs)
 print('Looking over %i eddy files' % N)
 
 if realization == 1:
@@ -63,19 +70,22 @@ else:
 
 if os.path.exists(zarr_path):
     print('Store already exists. Scan for existing observations within, and skip files accordingly')
-    obs_fnames = [int(f.split('/')[-1].split('.')[0].split('_')[-1]) for f in fnames]
+    # obs_fnames = [int(f.split('/')[-1].split('.')[0].split('_')[-1]) for f in fnames]
+    # obs_fnames = obs
     ds0 = xr.open_zarr(zarr_path)
     obs_exist = ds0['obs'].load().values.tolist()
     print('%i obs already exist in store' % len(obs_exist))
 
-    obs_new = [o for o in obs_fnames if not o in obs_exist]
-    obs_saved = [o for o in obs_fnames if o in obs_exist]
+    obs_new   = [o for o in obs if not o in obs_exist]
+    obs_saved = [o for o in obs if     o in obs_exist]
 
-    df_fnames = pd.Series(index=obs_fnames,data=fnames)
+    # df_fnames = pd.Series(index=obs_fnames,data=fnames)
+    # df_fnames = df_filtered[df_filtered['obs'].isin(obs)]
 
-    fnames_new = df_fnames[obs_new].values
-    fnames_saved = df_fnames[obs_saved].values
-    N_new = len(fnames_new)
+    # fnames_new = df_fnames[obs_new].values
+    fnames_saved = df_filtered[df_filtered['obs'].isin(obs_saved)]['fname'].values
+    # N_new = len(fnames_new)
+    N_new = len(obs_new)
 
     if len(fnames_saved) > 0:
         print('Move %i already saved files' % len(fnames_saved))
@@ -88,10 +98,12 @@ if os.path.exists(zarr_path):
             s = os.system(command)
             assert s == 0
 
-    print('Process %i new files' % len(fnames_new))
+    print('Process %i new eddies' % len(obs_new))
 
     N = N_new
-    fnames = fnames_new
+    # fnames = fnames_new
+    obs = obs_new
+    df_filtered = df_filtered[df_filtered['obs'].isin(obs_new)]
 
     ds0.close()
 else:
@@ -103,17 +115,31 @@ else:
 
 block_size = 1000 # chunk length in obs
 
-if len(fnames) < block_size:
+if len(obs) < block_size:
     raise ValueError('Need at least %i files to process, have only %i' % (block_size, len(fnames)))
 
-n_blocks = len(fnames) // block_size
+n_blocks = len(obs) // block_size
+
+# n_blocks = 5
 
 for ni in range(n_blocks):
     t0 = T.time()
     print(datetime.today().strftime('%Y-%m-%d %H:%M:%S') + ' : ' + 'Processing block %i / %i' % (ni+1, n_blocks))
-    fnames_block = fnames[ni * block_size : (ni + 1) * block_size]
+    # fnames_block = fnames[ni * block_size : (ni + 1) * block_size]
+    obs_block = obs[ni * block_size : (ni + 1) * block_size]
+    df_block = df_filtered[df_filtered['obs'].isin(obs_block)]
+    fnames_block = df_block['fname'].values.tolist()
     try:
-        ds = xr.open_mfdataset(fnames_block,combine='nested',concat_dim='obs')
+        # ds = xr.open_mfdataset(fnames_block,combine='nested',concat_dim='obs')
+        ds = []
+        for obs_id, group in df_block.groupby('obs'):
+            files = group['fname'].tolist()
+            dsi = xr.open_mfdataset(files, combine='by_coords')
+            dsi = dsi.expand_dims(obs=[obs_id])  # Add obs dimension
+            ds.append(dsi)
+        
+        # Concatenate all datasets along 'obs'
+        ds = xr.concat(ds, dim='obs')
     except Exception as e:
         print('Opening failed. Diagnosing...')
         for f in fnames_block:
@@ -151,10 +177,12 @@ for ni in range(n_blocks):
         ds[varname].encoding.update({"chunks": (-1), "compressor":compressor})
 
     if not os.path.exists(zarr_path):
+        print('create store')
         ds.to_zarr(
             zarr_path
         )
     else:
+        print('append to store')
         ds.to_zarr(
             zarr_path ,
             append_dim='obs',
@@ -174,28 +202,3 @@ for ni in range(n_blocks):
 
 print('Done with EXP = %s' % EXP)
 print('DONE')
-
-# # ==========================================
-# # Interpolate daily mean 0.125 deg to 0.25 deg .nc
-# grid = '0.25/0.25'
-# for date in dates:
-#     print('Getting date: %s' % date)
-#     year, month, day = date.year, date.month, date.day
-
-#     output_filename_tmp='/ec/res4/scratch/neam/test/wind_vars_0125_%.4i-%.2i-%.2i_mean.nc' % (year,month,day)
-#     output_filename='/ec/res4/scratch/neam/test/wind_vars_025_%.4i-%.2i-%.2i_mean.nc' % (year,month,day)
-
-#     if os.path.exists(output_filename):
-#         print('Daily mean output already exists. Skip this date.')
-
-#     if not os.path.exists(output_filename_tmp):
-#         command = 'MIR_GRIB_INPUT_BUFFER_SIZE=77760179 /usr/local/apps/mars/versions/7.0.0.2/bin/mir --grid={grid} --interpolation=grid-box-average {input} {output}'.format(
-#             grid=grid,
-#             input=output_filename_tmp,
-#             output=output_filename
-#         )
-        
-#         s=os.system(command)
-#         assert s==0
-
-# print('Done')
