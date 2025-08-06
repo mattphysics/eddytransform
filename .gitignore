@@ -5,6 +5,10 @@
 test*/
 data/data_0.1deg.nc
 data/data_native.nc
+data/data_0.25deg_full.nc
+eddies_test.nc
+
+.vscode
 
 *.backup
 *.swo

@@ -10,6 +10,7 @@ import scipy
 import pandas as pd
 import os
 from glob import glob
+import time as T
 
 def open_mohc_jasmin(
     model,
@@ -674,6 +675,7 @@ def transform_sample_point(
             # lats = ds_region.lat.values,
             lats = ds_region_wind.lat.values,
         )
+    print('Wind angle: %.2f rad, %.2f deg' % (wind_direction_in_radians_from_x,np.rad2deg(wind_direction_in_radians_from_x)))
 
     # Find coordinates of requested locations in local cartesian coordinate system
     sample_position_vectors_in_original_coords = create_position_vectors_in_original_coords(
@@ -1056,6 +1058,54 @@ def hpfilter(
     #   - on the resampled data in eddy-space?
     print('TBD')
 
+def save_eddy(eddyi, fnamei, nsave_max=50):
+    '''
+    Save eddy dataset to disk reliably, retrying if the saved file is corrupt.
+
+    Parameters:
+        eddyi (xr.Dataset): The eddy dataset to save.
+        fnamei (str): Path to save the file.
+        nsave_max (int): Maximum number of save attempts.
+
+    Returns:
+        int: 0 if saved successfully, -1 if failed after retries.
+    '''
+    nsave = 1
+
+    while nsave <= nsave_max:
+        print(f'Try saving to {fnamei}. Attempt number {nsave}')
+        
+        try:
+            eddyi.to_netcdf(fnamei)
+        except Exception as e:
+            print(f"Write error during to_netcdf on attempt {nsave}:\n{e}")
+            nsave += 1
+            continue
+
+        # add delay if getting many failed write attempts
+        if nsave > 10:
+            T.sleep(0.1)  # 100 milliseconds
+        elif nsave > 40:
+            T.sleep(1)  # 1 second
+
+        if os.path.exists(fnamei):
+            try:
+                xr.open_dataset(fnamei).close()
+                print(f'Successfully saved eddy to file: {fnamei}')
+                return 0
+            except Exception as e:
+                print(f"Error validating saved file {fnamei}:\n{e}")
+                if nsave < nsave_max:
+                    os.remove(fnamei)
+                else:
+                    print("Final attempt failed. Keeping file for inspection.")
+                    return -1
+
+        nsave += 1
+
+    print('Exceeded maximum number of save attempts. File not saved successfully.')
+    return -1
+
 
 def loop_over_eddies(
     ds,
@@ -1141,7 +1191,8 @@ def loop_over_eddies(
                     # fnamei = fname.replace('.nc','_%s.nc' % param)
                     eddyi.coords['obs'] = tracki['obs']
                     print('Saving eddy obs %i, variable %s to fname %s' % (eddyi['obs'], param, fnamei))
-                    eddyi.to_netcdf(fnamei)
+                    # eddyi.to_netcdf(fnamei)
+                    save_eddy(eddyi, fnamei)
                 else:
                     eddy.append(eddyi)
         if rotate_winds:
@@ -1175,7 +1226,8 @@ def loop_over_eddies(
                     fnamei = fname.replace('.nc','_%s.nc' % 'uv')
                     eddyi.coords['obs'] = tracki['obs']
                     print('Saving eddy obs %i, variable %s to fname %s' % (eddyi['obs'], 'uv', fnamei))
-                    eddyi.to_netcdf(fnamei)
+                    # eddyi.to_netcdf(fnamei)
+                    save_eddy(eddyi, fnamei)
                 else:
                     eddy.append(eddyi)
 
@@ -1184,7 +1236,8 @@ def loop_over_eddies(
             eddy.coords['obs'] = tracki['obs']
             if fname_root is not None:
                 print('Saving eddy obs %i to fname %s' % (eddy['obs'], fname))
-                eddy.to_netcdf(fname)
+                # eddy.to_netcdf(fname)
+                save_eddy(eddy, fname)
             else:
                 eddies.append(eddy)
         N_saved += 1

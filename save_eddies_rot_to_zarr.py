@@ -14,13 +14,14 @@ import time as T
 #EXP = 'GPM-IMERG'
 #EXP = 'surface_wind'
 #EXP = 'ESA-CCI-v3'
-#EXP = 'tco1279-eerie_production_202407'
-#EXP = 'tco1279-eerie_production_202408-c_0_a_LR20'
+# EXP = 'tco1279-eerie_production_202407'
+# EXP = 'tco1279-eerie_production_202408-c_0_a_LR20'
 # EXP = 'tco399-eerie_production_202407'
-MODEL = 'HadGEM3-GC5-EERIE-N640'
-EXP   = 'highresSST-SmoothAnom'
+EXP = 'tco399-eerie_production_202408-c_0_a_LR20'
+# MODEL = 'HadGEM3-GC5-EERIE-N640'
+# EXP   = 'highresSST-SmoothAnom'
 # EXP   = 'highresSST-present'
-# kind  = 'anticyclonic'
+#kind  = 'anticyclonic'
 kind = 'cyclonic'
 realization = 1
 print(EXP,kind)
@@ -32,16 +33,19 @@ T.sleep(3)
 
 
 if kind == 'anticyclonic':
-    path = '/gws/nopw/j04/eerie/aengenh/output/{MODEL}/{EXP}/processed/composites_rot_acyc/'.format(MODEL=MODEL,EXP=EXP)
+    # path = '/ec/fws5/lb/project/eerie/output/{EXP}/processed/composites_rot_acyc/'.format(EXP=EXP)
+    path = '/ec/fws5/lb/project/eerie/output/{EXP}/processed/composites_GS_rot_acyc/'.format(EXP=EXP)
 elif kind == 'cyclonic':
-    path = '/gws/nopw/j04/eerie/aengenh/output/{MODEL}/{EXP}/processed/composites_rot_cyc/'.format(MODEL=MODEL,EXP=EXP)
+    # path = '/ec/fws5/lb/project/eerie/output/{EXP}/processed/composites_rot_cyc/'.format(EXP=EXP)
+    path = '/ec/fws5/lb/project/eerie/output/{EXP}/processed/composites_GS_rot_cyc/'.format(EXP=EXP)
 else:
     raise ValueError('kind %s is not defined' % kind)
 
 fnames = glob('%s*.nc' % path)
 
 df = pd.DataFrame(fnames,columns=['fname'])
-df['obs'] = df['fname'].str.split('_').str[-2]
+# df['obs'] = df['fname'].str.split('_').str[-2]
+df['obs'] = df['fname'].str.split('/').str[-1].str.split('_').str[3]
 df['varname'] = df['fname'].str.split('_').str[-1].str.split('.').str[0]
 df['realization'] = df['fname'].str.split('/').str[-1].str.split('_').str[2]
 varnames = df['varname'].unique().tolist()
@@ -57,16 +61,18 @@ fnames = df_filtered['fname'].values.tolist()
 obs = sorted(df_filtered['obs'].unique().tolist())
 
 N = len(obs)
-print('Looking over %i eddy files' % N)
+print('Looking over %i eddy files over %i variables' % (N,Nvar))
+
+T.sleep(3)
 
 if realization == 1:
+    # zarr_path = path[:-1] + '_2000-2009' + '.zarr'
     zarr_path = path[:-1] + '.zarr'
     print('Save to %s' % (zarr_path))
 else:
+    # zarr_path = path[:-1] + '_r_%i' % realization + '_2000-2009' + '.zarr'
     zarr_path = path[:-1] + '_r_%i' % realization + '.zarr'
     print('Save realization %i to %s' % (realization,zarr_path))
-
-# TODO: 2025-05-28: GOOD UNTIL HERE, CONTINUE below!
 
 if os.path.exists(zarr_path):
     print('Store already exists. Scan for existing observations within, and skip files accordingly')
@@ -91,6 +97,7 @@ if os.path.exists(zarr_path):
         print('Move %i already saved files' % len(fnames_saved))
         for f in fnames_saved:
             fparts = f.split('/')
+            # saved_dir = '/'.join(fparts[:-1]) + '/saved_2000-2009/'
             saved_dir = '/'.join(fparts[:-1]) + '/saved/'
             if not os.path.exists(saved_dir):
                 os.system('mkdir -p %s' % saved_dir)
@@ -191,6 +198,7 @@ for ni in range(n_blocks):
     # Move saved files to other directory
     for f in fnames_block:
         fparts = f.split('/')
+        # saved_dir = '/'.join(fparts[:-1]) + '/saved_2000-2009/'
         saved_dir = '/'.join(fparts[:-1]) + '/saved/'
         if not os.path.exists(saved_dir):
             os.system('mkdir -p %s' % saved_dir)
