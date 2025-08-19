@@ -991,7 +991,7 @@ def get_tracks(kind,source='AVISO',platform='ATOS',path=None):
 
     if not kind in ['cyclonic','anticyclonic']:
         raise ValueError('kind %s is not defined' % kind)
-    if not source in ['AVISO']:
+    if not source in ['AVISO','IFS-FESOM_control','ICON_control','HadGEM3-HH_control']:
         raise ValueError('source %s is not defined' % source)
     if not platform in ['ATOS','Levante','Jasmin']:
         raise ValueError('platform %s is not defined' % platform)
@@ -1013,6 +1013,23 @@ def get_tracks(kind,source='AVISO',platform='ATOS',path=None):
             catobs = intake.open_catalog('https://raw.githubusercontent.com/eerie-project/intake_catalogues/main/eerie.yaml')\
                                     ['dkrz']['disk']['observations']
             tracks = catobs['AVISO']['eddy-tracks'][kind].to_dask()
+    elif source == 'IFS-FESOM_control':
+        if platform == 'Levante':
+            cat_derived = intake.open_catalog('https://raw.githubusercontent.com/eerie-project/intake_catalogues/refs/heads/main/dkrz/disk/derived-variables/main.yaml')
+            cati = cat_derived['eddytracks']['ifs-fesom2-sr.eerie-control-1950.v20240304.ocean.gr025']
+            tracks = cati[kind](chunks={}).to_dask()
+    elif source == 'ICON_control':
+        if platform == 'Levante':
+            cat_derived = intake.open_catalog('https://raw.githubusercontent.com/eerie-project/intake_catalogues/refs/heads/main/dkrz/disk/derived-variables/main.yaml')
+            cati = cat_derived['eddytracks']['icon-esm-er.eerie-control-1950.v20231106.ocean.gr025']
+            tracks = cati[kind](chunks={}).to_dask()
+    elif source == 'HadGEM3-HH_control':
+        if platform == 'Levante':
+            cat_derived = intake.open_catalog('https://raw.githubusercontent.com/eerie-project/intake_catalogues/refs/heads/main/dkrz/disk/derived-variables/main.yaml')
+            cati = cat_derived['eddytracks']['ifs-fesom2-sr.eerie-control-1950.v20240304.ocean.gr025']
+            tracks = cati[kind](chunks={}).to_dask()
+    else:
+        print('source = %s is not defined' % source)
 
     tracks['time'].values = pd.to_datetime(tracks.time)
     tracks['obs'] = np.arange(tracks['obs'].size)
