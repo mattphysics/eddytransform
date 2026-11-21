@@ -64,7 +64,7 @@ figcaption { font-size: .8rem; color: var(--muted); margin-top: .3rem; }
     <tr><td>Coupled tco3999 RCBMF</td><td>own, py-eddy-tracker</td><td class="n">51,884</td><td class="n">49,433</td><td><span class="pill good">complete</span></td><td><span class="pill good">verified</span></td></tr>
     <tr><td>Coupled tco3999 deep-off</td><td>own, py-eddy-tracker</td><td class="n">51,397</td><td class="n">49,182</td><td><span class="pill good">complete</span></td><td><span class="pill good">verified</span></td></tr>
   </table></div>
-  <p>Every 10th day from 2020-01-01, both eddy kinds, Southern Ocean box (60°S–25°S). All 382 tasks finished with exit code 0 and no errors. The AMIP counts equal the number of AVISO observations in the box on those dates exactly. All ten zarr stores are verified (store obs = file count, no bad files, ids unique). Evaluation below.</p>
+  <p>Every 10th day from 2020-01-01, both eddy kinds, Southern Ocean box (60°S–25°S). All 382 tasks finished with exit code 0 and no errors. The AMIP counts equal the number of AVISO observations in the box on those dates exactly. All ten zarr stores are verified (store obs = file count, no bad files, ids unique). Evaluation below, then the Gulf Stream box.</p>
 </section>
 
 <section>
@@ -155,5 +155,31 @@ figcaption { font-size: .8rem; color: var(--muted); margin-top: .3rem; }
   <p>The maps (rotated to the mean wind, scaled by radius) show the expected structure: cold-core cyclones and warm-core anticyclones with a wind-speed dip/rise over the eddy; the AMIP and coupled composites look alike by eye, with the coupled SST core slightly stronger. The large-scale gradient across the box is the mean meridional gradient of the surrounding field, not an eddy effect.</p>
   <img src="img/maps_amip_vs_coupled.png" alt="AMIP vs coupled composites" style="max-width:100%">
   <p class="note">Caveats: the ocean daily time-stamp offset (stamp minus one day) is inferred, not verified; the evaluation uses every 10th day only; deep-on covers 6 months.</p>
+</section>
+<section>
+  <h2>Second region: Gulf Stream box</h2>
+  <p>Same method, box 82°W–20°W, 28°N–60°N, every 10 days. All 10 chunk jobs finished with exit 0, file counts match the logged per-date counts, and all ten zarr stores are verified. About 8 times fewer eddies than the Southern Ocean (≈2,100 tracks per kind in the AVISO runs), so errors are 3–4 times larger.</p>
+  <div class="tw"><table>
+    <tr><th>Run</th><th class="n">Cyclonic</th><th class="n">Anticyclonic</th></tr>
+    <tr><td>tco2559 deep-on</td><td class="n">3,631</td><td class="n">3,628</td></tr>
+    <tr><td>tco2559 RCBMF, tco3999 AMIP</td><td class="n">7,935</td><td class="n">7,888</td></tr>
+    <tr><td>Coupled RCBMF</td><td class="n">7,650</td><td class="n">7,228</td></tr>
+    <tr><td>Coupled deep-off</td><td class="n">7,705</td><td class="n">7,283</td></tr>
+  </table></div>
+  <div class="tw"><table>
+    <tr><th>Centre anomaly (cyc / acyc)</th><th class="n">AMIP tco3999</th><th class="n">coupled RCBMF</th><th class="n">coupled deep-off</th></tr>
+    <tr><td>SST [K]</td><td class="n">−0.325 / +0.302</td><td class="n">−0.407 / +0.432</td><td class="n">−0.430 / +0.452</td></tr>
+    <tr><td>10 m wind speed [m/s]</td><td class="n">−0.022 / +0.114</td><td class="n">−0.029 / +0.142</td><td class="n">−0.037 / +0.169</td></tr>
+    <tr><td>Latent heat flux, down + [W/m²]</td><td class="n">+9.3 / −8.3</td><td class="n">+10.5 / −11.0</td><td class="n">+11.0 / −11.2</td></tr>
+    <tr><td>Boundary layer height [m]</td><td class="n">−9.0 / +14.9</td><td class="n">−13.9 / +18.8</td><td class="n">−16.2 / +22.5</td></tr>
+    <tr><td>Precipitation [mm/day]</td><td class="n">−0.05 / +0.09</td><td class="n">−0.16 / +0.13</td><td class="n">+0.00 / +0.09</td></tr>
+  </table></div>
+  <ul>
+    <li><b>Coupled vs AMIP:</b> the SO finding holds and is stronger here. Coupled SST anomalies are 30–40% larger (anticyclones +0.43–0.45 vs +0.30 K) with larger latent heat and boundary layer responses. Caveat: coupled eddies are tracked on the model's own sea level and sit about 1° further south on average, so sample differences are not excluded.</li>
+    <li><b>Resolution (paired, 7,935 / 7,888 identical eddies):</b> again no meaningful difference. One entry reaches 2 SE (anticyclone wind speed −0.024 ± 0.012 m/s), but it did not appear in the SO, and with about 22 comparisons per box one such entry is expected by chance.</li>
+    <li><b>Deep-on vs RCBMF (paired, 6 months):</b> in cyclones the along-wind anomaly is +0.059 ± 0.021 m/s and the boundary layer height +5.0 ± 1.6 m larger with deep-on (about 3 SE each). The SO showed no boundary layer difference and an opposite-sign wind difference, so this is not robust; the runs also differ in version and cover January–June 2020 only.</li>
+    <li><b>Coupled RCBMF vs deep-off (unpaired):</b> only the cyclonic precipitation anomaly stands out (−0.160 ± 0.068 mm/day, 2.4 SE: RCBMF drier in the eddy centre). It has the same direction as the SO (−0.033, cyclonic; +0.033, anticyclonic) and the anticyclonic Gulf Stream value (+0.040) does too, so there is a weak consistent hint that RCBMF gives a stronger precipitation anomaly. Not conclusive: one entry of 22 per box, and the SO value is below 2 SE.</li>
+  </ul>
+  <img src="img/GS_maps_amip_vs_coupled.png" alt="Gulf Stream: AMIP vs coupled composites" style="max-width:100%">
 </section>
 </div>
