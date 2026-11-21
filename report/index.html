@@ -1,0 +1,159 @@
+<title>Eddy Composites 2020–21</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: one reading column, tables and small bar charts as the evidence. Ink-blue accent on a cool paper neutral. */
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --fg: #1b2330; --muted: #5d6877; --rule: #dde1e8;
+  --accent: #1f5f8b; --accent-soft: #dcebf5; --good: #1f7a4d; --warn: #a15c07; --bad: #a32d2d;
+  --bar: #1f5f8b; --bar2: #9aa7b6;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-head: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12161d; --panel: #1a2029; --fg: #e4e8ee; --muted: #9aa5b3; --rule: #2b3340;
+  --accent: #6fb1dc; --accent-soft: #1d3345; --good: #5cc48d; --warn: #e0a14a; --bad: #e07a7a;
+  --bar: #6fb1dc; --bar2: #566273; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #12161d; --panel: #1a2029; --fg: #e4e8ee; --muted: #9aa5b3; --rule: #2b3340;
+  --accent: #6fb1dc; --accent-soft: #1d3345; --good: #5cc48d; --warn: #e0a14a; --bad: #e07a7a;
+  --bar: #6fb1dc; --bar2: #566273; color-scheme: dark; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); line-height: 1.55;
+  padding-block: 2rem 4rem; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.wrap { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 2.2rem; }
+h1, h2, h3 { font-family: var(--font-head); text-wrap: balance; margin: 0; line-height: 1.2; }
+h1 { font-size: 1.9rem; } h2 { font-size: 1.25rem; padding-top: .4rem; border-top: 1px solid var(--rule); } h3 { font-size: 1rem; }
+p { margin: .5rem 0; max-width: 68ch; } .lede { font-size: 1.05rem; color: var(--muted); max-width: 66ch; }
+.meta { font-size: .8rem; color: var(--muted); letter-spacing: .02em; }
+section { display: flex; flex-direction: column; gap: .8rem; min-width: 0; }
+.tw { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: .86rem; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: .42rem .6rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; white-space: nowrap; }
+td.n, th.n { text-align: right; }
+code { font-family: var(--font-mono); font-size: .82em; background: var(--accent-soft); padding: .08em .35em; border-radius: 3px; }
+.note { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: .7rem .9rem; font-size: .9rem; }
+.pill { display: inline-block; font-size: .72rem; font-weight: 600; padding: .08rem .5rem; border-radius: 99px; border: 1px solid currentColor; white-space: nowrap; }
+.good { color: var(--good); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+.bar { display: flex; align-items: center; gap: .5rem; }
+.bar i { display: block; height: .55rem; background: var(--bar); border-radius: 2px; }
+.bar i.b2 { background: var(--bar2); }
+.bar span { font-size: .78rem; color: var(--muted); min-width: 3.2rem; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
+.stat b { display: block; font-family: var(--font-head); font-size: 1.5rem; }
+.stat { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: .7rem .9rem; min-width: 0; }
+.stat small { color: var(--muted); font-size: .78rem; }
+figure { margin: 0; } figure img { width: 100%; height: auto; border: 1px solid var(--rule); border-radius: 4px; }
+figcaption { font-size: .8rem; color: var(--muted); margin-top: .3rem; }
+</style>
+
+<div class="wrap">
+<header>
+  <p class="meta">IFS tco2559 · tco3999 · coupled IFS-FESOM · Southern Ocean box · status 21 Nov 2026, 01:30 CET</p>
+  <h1>Eddy composites for the 2020–21 IFS simulations</h1>
+  <p class="lede">Composites in the same style as the earlier IFS-FESOM ones (eddy-centric, scaled to the radius, rotated to the mean wind) for five simulations, using daily means on a 0.25° grid. This page collects what was checked and decided along the way, and is updated as results arrive.</p>
+</header>
+
+<section>
+  <h2>Where things stand</h2>
+  <div class="tw"><table>
+    <tr><th>Run</th><th>Tracks</th><th class="n">Cyclonic</th><th class="n">Anticyclonic</th><th>Composites</th><th>zarr</th></tr>
+    <tr><td>tco2559 v20240901 (deep-on)</td><td>AVISO</td><td class="n">26,313</td><td class="n">24,874</td><td><span class="pill good">complete</span></td><td><span class="pill good">verified</span></td></tr>
+    <tr><td>tco2559 v20250101 (RCBMF)</td><td>AVISO</td><td class="n">60,807</td><td class="n">57,418</td><td><span class="pill good">complete</span></td><td><span class="pill good">verified</span></td></tr>
+    <tr><td>tco3999 AMIP</td><td>AVISO</td><td class="n">60,807</td><td class="n">57,418</td><td><span class="pill good">complete</span></td><td><span class="pill good">verified</span></td></tr>
+    <tr><td>Coupled tco3999 RCBMF</td><td>own, py-eddy-tracker</td><td class="n">51,884</td><td class="n">49,433</td><td><span class="pill good">complete</span></td><td><span class="pill good">verified</span></td></tr>
+    <tr><td>Coupled tco3999 deep-off</td><td>own, py-eddy-tracker</td><td class="n">51,397</td><td class="n">49,182</td><td><span class="pill good">complete</span></td><td><span class="pill good">verified</span></td></tr>
+  </table></div>
+  <p>Every 10th day from 2020-01-01, both eddy kinds, Southern Ocean box (60°S–25°S). All 382 tasks finished with exit code 0 and no errors. The AMIP counts equal the number of AVISO observations in the box on those dates exactly. All ten zarr stores are verified (store obs = file count, no bad files, ids unique). Evaluation below.</p>
+</section>
+
+<section>
+  <h2>The AVISO tracks cover the simulations</h2>
+  <p>Both AVISO META3.2 files run from 1993-01-01 to 2022-02-09 and hold about 1.27M cyclonic and 1.20M anticyclonic observations in each of 2020 and 2021. The simulations span 2020-01-01 to 2021-03-01, so the AMIP-type runs use them directly.</p>
+</section>
+
+<section>
+  <h2>Were the 0.25° products remapped conservatively?</h2>
+  <p>Yes, in every case tested. Each 0.25° field was compared with the matching HEALPix field over a 20°×20° Southern Ocean box, as (C) a conservative area average of the fine cells and (N) the single nearest fine cell, which is what point sampling or bilinear remapping returns. Precipitation is the noisiest field and separates the two best.</p>
+  <div class="tw"><table>
+    <tr><th>Pair (precipitation)</th><th>Correlation with C</th><th>Correlation with N</th><th class="n">p99.9 vs C</th><th class="n">p99.9 vs N</th></tr>
+    <tr><td>tco2559 daily vs zoom 10</td><td><div class="bar"><i style="width:99.9%"></i><span>0.9992</span></div></td><td><div class="bar"><i class="b2" style="width:98.3%"></i><span>0.983</span></div></td><td class="n">1.004</td><td class="n">0.934</td></tr>
+    <tr><td>tco3999 AMIP hourly vs H2048</td><td><div class="bar"><i style="width:99.98%"></i><span>0.9998</span></div></td><td><div class="bar"><i class="b2" style="width:95.7%"></i><span>0.957</span></div></td><td class="n">0.987</td><td class="n">0.955</td></tr>
+    <tr><td>Coupled RCBMF hourly vs H2048</td><td><div class="bar"><i style="width:99.95%"></i><span>0.9995</span></div></td><td><div class="bar"><i class="b2" style="width:92.0%"></i><span>0.920</span></div></td><td class="n">1.006</td><td class="n">0.741</td></tr>
+    <tr><td>Coupled deep-off hourly vs H2048</td><td><div class="bar"><i style="width:99.92%"></i><span>0.9992</span></div></td><td><div class="bar"><i class="b2" style="width:88.1%"></i><span>0.881</span></div></td><td class="n">1.027</td><td class="n">0.661</td></tr>
+  </table></div>
+  <p>Point sampling would clip the heaviest precipitation by 25–35% in the coupled runs; the products do not. Temperature, wind and column water agree with C even more closely (correlation ≥ 0.9997). Consequence: the 0.25° products are used for all five runs, with no detour through H2048.</p>
+</section>
+
+<section>
+  <h2>Daily means, and what <code>tprate</code> is</h2>
+  <div class="grid2">
+    <div class="stat"><b>tco2559</b><small>native daily means, stamped 12:00, used as they are. <code>tprate</code> is the true daily mean here.</small></div>
+    <div class="stat"><b>tco3999, coupled</b><small>hourly only. Daily means are built: mean of the 24 hourly values 00–23 UTC, and for precipitation and fluxes the sum of the 24 hourly <code>tp</code> or flux accumulations stamped 01:00–24:00, divided by 86400 s.</small></div>
+  </div>
+  <p>Hourly <code>tprate</code> is an instantaneous rate: against <code>tp</code>/3600 the correlation is only 0.75–0.80 (means agree within 3%), so hourly <code>tp</code> is used instead. The 0.25° and HEALPix products share one time stamp convention for <code>tp</code> (correlation 0.9995–0.9999 at the same stamp, 0.4–0.8 an hour off).</p>
+  <p>Pilot cross-check on 2020-01-21, whole globe: tco3999 AMIP daily means built from hourly data against the native tco2559 daily means (different runs, same date).</p>
+  <div class="tw"><table>
+    <tr><th>Variable</th><th class="n">tco3999 (built)</th><th class="n">tco2559 (native)</th></tr>
+    <tr><td>Net surface shortwave, W m⁻²</td><td class="n">130.7</td><td class="n">130.7</td></tr>
+    <tr><td>Net top thermal, W m⁻²</td><td class="n">−221.5</td><td class="n">−222.2</td></tr>
+    <tr><td>Latent heat flux, W m⁻²</td><td class="n">−64.7</td><td class="n">−65.8</td></tr>
+    <tr><td>Precipitation, 10⁻⁸ m s⁻¹</td><td class="n">2.83</td><td class="n">2.86</td></tr>
+    <tr><td>2 m temperature, K</td><td class="n">276.7</td><td class="n">277.3</td></tr>
+  </table></div>
+  <p>Sign, units and accumulation handling are consistent. The accumulation window and stamp were taken from the catalog text, not tested against the native daily files.</p>
+</section>
+
+<section>
+  <h2>Eddy tracks for the coupled runs</h2>
+  <p>The coupled runs have their own ocean, so AVISO's eddies do not apply. Tracks were made with py-eddy-tracker on the daily ocean <code>avg_zos</code> (HEALPix zoom 9, the finest ocean level available), averaged onto the 0.25° grid. Settings follow the earlier EERIE model recipe: 700 km high-pass, 2 mm contour steps, 70% shape error; tracking with 4 virtual steps, tracks of at least 10 observations kept.</p>
+  <div class="tw"><table>
+    <tr><th>Run</th><th class="n">Cyclonic obs</th><th class="n">Anticyclonic obs</th><th class="n">SO obs per day (cyc / anti)</th></tr>
+    <tr><td>Coupled RCBMF</td><td class="n">1.29M</td><td class="n">1.17M</td><td class="n">1,208 / 1,153</td></tr>
+    <tr><td>Coupled deep-off</td><td class="n">1.27M</td><td class="n">1.16M</td><td class="n">1,198 / 1,145</td></tr>
+    <tr><td>AVISO (reference, 2020)</td><td class="n">1.27M</td><td class="n">1.20M</td><td class="n">1,414 cyclonic</td></tr>
+  </table></div>
+  <p>The model tracks have about 15% fewer observations per day than AVISO; median radius is 56 km (5–95%: 24–131 km). Ocean daily means are stamped at 00:00 from 2020-01-02 to 2021-03-01, which fits 425 simulated days only if each stamp is the end of its day. Fields are labelled with stamp minus one day to line up with the atmospheric daily means. This is inferred from the time axis, not verified. Global-mean sea surface height is about −0.0002 m, so no drift correction was needed.</p>
+  <p>Track longitudes run continuously across 0° (−27° to 363°), so the driver wraps them to 0–360 before applying the box.</p>
+</section>
+
+<section>
+  <h2>A longitude edge case, found and fixed</h2>
+  <p>AVISO's eddy longitudes are not confined to 0–360: they run from −47° to 368° because tracks stay continuous across the 0° meridian. The first driver version filtered the box with <code>0 &lt; lon &lt; 360</code> and so dropped 260 cyclonic and 322 anticyclonic eddies (0.5%) from each AMIP run, while the coupled runs, run after a fix that wraps longitudes, kept them. The file counts against the track-based totals exposed the gap. The AMIP tasks were rerun with the fixed driver (resumable, 2 minutes per chunk); all five runs now use the same selection.</p>
+</section>
+
+<section>
+  <h2>Sample sizes at every 10 days</h2>
+  <div class="tw"><table>
+    <tr><th>Run</th><th class="n">Dates</th><th class="n">Cyclonic eddies</th><th class="n">Anticyclonic eddies</th></tr>
+    <tr><td>tco2559 v20240901 (6 months)</td><td class="n">19</td><td class="n">26,313</td><td class="n">24,874</td></tr>
+    <tr><td>tco2559 v20250101, tco3999 AMIP (AVISO tracks)</td><td class="n">43</td><td class="n">60,807</td><td class="n">57,418</td></tr>
+    <tr><td>Coupled RCBMF (own tracks)</td><td class="n">43</td><td class="n">51,884</td><td class="n">49,433</td></tr>
+    <tr><td>Coupled deep-off (own tracks)</td><td class="n">43</td><td class="n">51,397</td><td class="n">49,182</td></tr>
+  </table></div>
+  <p>These are observations, not unique eddies; long-lived eddies appear on several dates.</p>
+</section>
+
+<section>
+  <h2>Composite evaluation</h2>
+  <p>Centre anomaly (r &lt; 0.5 R minus the eddy's outer ring, r &gt; 2.5 R), mean ± track-clustered standard error; * = paired difference more than 2 SE from zero. Eddy radius median 51–56 km, mean latitude ≈ 43.5°S in all runs.</p>
+  <table>
+    <tr><th>Variable (cyc / acyc)</th><th class="n">AMIP tco3999</th><th class="n">coupled RCBMF</th><th class="n">coupled deep-off</th></tr>
+    <tr><td>SST [K]</td><td class="n">−0.324 / +0.366</td><td class="n">−0.347 / +0.435</td><td class="n">−0.342 / +0.438</td></tr>
+    <tr><td>10 m wind speed [m/s]</td><td class="n">−0.073 / +0.153</td><td class="n">−0.102 / +0.183</td><td class="n">−0.099 / +0.183</td></tr>
+    <tr><td>Latent heat flux, down + [W/m²]</td><td class="n">+6.7 / −8.1</td><td class="n">+7.3 / −9.6</td><td class="n">+7.5 / −10.0</td></tr>
+    <tr><td>Boundary layer height [m]</td><td class="n">−11.8 / +19.5</td><td class="n">−14.2 / +23.1</td><td class="n">−14.6 / +23.6</td></tr>
+    <tr><td>Precipitation [mm/day]</td><td class="n">−0.10 / +0.07</td><td class="n">−0.09 / +0.09</td><td class="n">−0.05 / +0.06</td></tr>
+  </table>
+  <h3>Findings</h3>
+  <ul>
+    <li><b>Resolution (tco3999 vs tco2559, identical 60,807 / 57,418 eddies, both with RCBMF):</b> centre anomalies are nearly the same. Significant but tiny differences: boundary layer height about 1 m larger in magnitude at tco3999 (−0.9 cyc, +1.0 acyc), sensible heat flux ±0.08–0.10 W/m², and a slightly weaker along-wind anomaly in cyclonic eddies (−0.012 m/s). Wind speed, latent heat, precipitation, water vapour, clouds: no significant difference.</li>
+    <li><b>Deep convection on vs off in the AMIP-type runs (tco2559, 26,313 / 24,874 identical eddies, 6 months):</b> essentially no difference. Only the cyclonic along-wind anomaly (−0.014 m/s) and the anticyclonic latent heat flux (−0.25 W/m²) exceed 2 SE; precipitation differences are within noise. Caveat: these two runs also differ in version and period coverage, so this is not a clean parameter test.</li>
+    <li><b>Coupled vs AMIP:</b> the largest difference. The coupled runs have a larger SST signal for anticyclones (+0.435 vs +0.366 K, +19%) and 5–10% stronger cyclonic and 20% stronger anticyclonic latent heat flux anomalies, wind and boundary layer height responses. Part of this is likely because the coupled runs have their own eddies, tracked on a different sea-level product, so the eddy sample is not identical; this is unpaired and was not separated from the model difference.</li>
+    <li><b>Coupled RCBMF vs deep-off (unpaired):</b> no significant difference in any variable at 2 SE. The largest is precipitation (±0.033 mm/day, ≈1.6 SE, opposite signs for cyc/acyc, i.e. a slightly stronger precipitation anomaly with RCBMF).</li>
+  </ul>
+  <p>The maps (rotated to the mean wind, scaled by radius) show the expected structure: cold-core cyclones and warm-core anticyclones with a wind-speed dip/rise over the eddy; the AMIP and coupled composites look alike by eye, with the coupled SST core slightly stronger. The large-scale gradient across the box is the mean meridional gradient of the surrounding field, not an eddy effect.</p>
+  <img src="img/maps_amip_vs_coupled.png" alt="AMIP vs coupled composites" style="max-width:100%">
+  <p class="note">Caveats: the ocean daily time-stamp offset (stamp minus one day) is inferred, not verified; the evaluation uses every 10th day only; deep-on covers 6 months.</p>
+</section>
+</div>
