@@ -6,7 +6,7 @@
 Anomaly = field minus that eddy's mean over the outer ring (r > 2.5 R). Centre = mean over r < 0.5 R.
 Paired comparisons use identical eddies (same AVISO observation index). Standard errors are
 clustered by track (repeated observations of one eddy are not independent).
-Usage: evaluate_composites.py compute|report
+Usage: evaluate_composites.py compute|report [SO|GS]   (GS writes to eval/GS/)
 """
 import os
 import pickle
@@ -16,7 +16,9 @@ import numpy as np
 import xarray as xr
 
 ROOT = '/work/bk1377/b382473/composites/'
-OUT = '/home/b/b382473/code/eddytransform/eval/'
+REGION = sys.argv[2] if len(sys.argv) > 2 else 'SO'      # SO (default, old names) or GS
+assert REGION in ('SO', 'GS')
+OUT = '/home/b/b382473/code/eddytransform/eval/' + ('' if REGION == 'SO' else 'GS/')
 AVISO = '/work/bk1377/b382473/obs/AVISO/META3.2_DT_allsat_%s_long_19930101_20220209.nc'
 TRK = '/work/bk1377/b382473/eddytracks/%s/0.25deg/eddyTracks/%s_tracks.nc'
 SOURCES = ['tco2559_deepon', 'tco2559_rcbmf', 'tco3999_amip', 'ng5_rcbmf', 'ng5_deepoff']
@@ -39,7 +41,7 @@ PAIRS = [('tco3999_amip', 'tco2559_rcbmf'), ('tco2559_deepon', 'tco2559_rcbmf'),
 
 
 def zpath(src, tag):
-    return os.path.join(ROOT, src, 'atmos', 'gr025', '2D_daily', 'composites_rot_%s.zarr' % tag)
+    return os.path.join(ROOT, src, 'atmos', 'gr025', '2D_daily', 'composites_%srot_%s.zarr' % ('' if REGION == 'SO' else 'GS_', tag))
 
 
 def track_ids(src, kind, obs):
@@ -160,7 +162,7 @@ def report():
             d = np.nanmean(c1) - np.nanmean(c2); se = np.hypot(s1, s2)
             P('  %-28s rcbmf=%+.3f deepoff=%+.3f diff %+.3f +- %.3f %s' % ('%s [%s]' % (lab, unit), np.nanmean(c1), np.nanmean(c2), d, se, '*' if abs(d) > 2 * se else ''))
     # ---- eddy populations ----------------------------------------------------------------------
-    P('\n=== eddy populations (SO box, every 10 days) ===')
+    P('\n=== eddy populations (%s box, every 10 days)' % REGION + ' ===')
     for tag in KINDS:
         for s in SOURCES:
             m = res.get((s, tag, 'meta'))
